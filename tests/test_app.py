@@ -104,3 +104,103 @@ def test_games_endpoint_returns_502_on_http_error(client):
         response = client.get("/games")
 
         assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# /api/scores endpoint (Issue #5 — auto-refresh data source)
+# ---------------------------------------------------------------------------
+
+
+def test_api_scores_endpoint_returns_200(client):
+    """GET /api/scores responds with HTTP 200 on a successful NHL API call."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": MOCK_GAMES}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+
+        assert response.status_code == 200
+
+
+def test_api_scores_endpoint_returns_formatted_games(client):
+    """GET /api/scores returns a JSON list of formatted game dicts."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": MOCK_GAMES}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert isinstance(data, list)
+        assert len(data) == 1
+        game = data[0]
+        assert "away" in game
+        assert "home" in game
+        assert "away_score" in game
+        assert "home_score" in game
+        assert "status" in game
+
+
+def test_api_scores_endpoint_returns_empty_list_on_http_error(client):
+    """GET /api/scores returns HTTP 200 with an empty list when the NHL API fails."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("503 Service Unavailable")
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data == []
+
+
+# ---------------------------------------------------------------------------
+# Dashboard auto-refresh JavaScript (Issue #5)
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_contains_auto_refresh_script(client):
+    """GET /dashboard HTML includes JavaScript that polls /api/scores."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": []}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "setInterval" in html
+        assert "/api/scores" in html
+
+
+def test_dashboard_auto_refresh_interval_value_present(client):
+    """GET /dashboard HTML includes the 30-second polling interval value."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": []}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "30000" in html

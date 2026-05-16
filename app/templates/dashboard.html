@@ -33,6 +33,7 @@
 <body>
   <h1>NHL Scoreboard</h1>
 
+  <div id="games-container">
   {% if games %}
   <div class="games">
     {% for game in games %}
@@ -61,5 +62,40 @@
   {% else %}
   <p class="empty">No games scheduled for today.</p>
   {% endif %}
+  </div>
+
+  <script>
+    var REFRESH_INTERVAL_MS = 30000;
+
+    function buildGameCard(game) {
+      var label = game.status === 'live' ? 'Live' : game.status === 'final' ? 'Final' : 'Upcoming';
+      return '<div class="game ' + game.status + '">'
+        + '<span class="status-badge">' + label + '</span>'
+        + '<div class="matchup">'
+        + '<div class="team"><div class="team-abbrev">' + game.away + '</div><div class="vs">AWAY</div></div>'
+        + '<div><div class="score">' + game.away_score + ' – ' + game.home_score + '</div></div>'
+        + '<div class="team"><div class="team-abbrev">' + game.home + '</div><div class="vs">HOME</div></div>'
+        + '</div></div>';
+    }
+
+    function refreshScores() {
+      fetch('/api/scores')
+        .then(function(response) { return response.json(); })
+        .then(function(games) {
+          var container = document.getElementById('games-container');
+          if (!container) { return; }
+          if (games.length === 0) {
+            container.innerHTML = '<p class="empty">No games scheduled for today.</p>';
+          } else {
+            container.innerHTML = '<div class="games">' + games.map(buildGameCard).join('') + '</div>';
+          }
+        })
+        .catch(function() {
+          // Silently ignore fetch errors — page stays usable during transient API failures
+        });
+    }
+
+    setInterval(refreshScores, REFRESH_INTERVAL_MS);
+  </script>
 </body>
 </html>

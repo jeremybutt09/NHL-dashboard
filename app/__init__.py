@@ -42,6 +42,22 @@ def create_app(test_config: dict | None = None) -> Flask:
         except requests.HTTPError as exc:
             return jsonify({"error": str(exc)}), 502
 
+    @app.route("/api/scores")
+    def api_scores():
+        """Return today's formatted NHL game scores as JSON for auto-refresh polling.
+
+        Returns:
+            Response: JSON array of formatted game dicts (keys: away, home,
+                away_score, home_score, status). Returns an empty list with
+                HTTP 200 when the upstream NHL API is unavailable, so the
+                polling client does not break on transient failures.
+        """
+        try:
+            raw_games = get_todays_games()
+            return jsonify([format_game(g) for g in raw_games])
+        except requests.HTTPError:
+            return jsonify([])
+
     @app.route("/dashboard")
     def dashboard():
         """Render today's NHL scoreboard as an HTML dashboard.
