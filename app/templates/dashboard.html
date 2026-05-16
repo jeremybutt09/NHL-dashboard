@@ -28,6 +28,10 @@
     .vs { font-size: 0.8rem; color: #8b949e; }
     .live .score { color: #3fb950; }
     .empty { text-align: center; color: #8b949e; padding: 3rem 0; font-size: 1rem; }
+    .odds { display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.75rem; color: #8b949e; }
+    .odds span { font-weight: 600; }
+    .odds .positive { color: #3fb950; }
+    .odds .negative { color: #f85149; }
   </style>
 </head>
 <body>
@@ -56,6 +60,12 @@
           <div class="vs">HOME</div>
         </div>
       </div>
+      {% if game.away_ml is not none or game.home_ml is not none %}
+      <div class="odds">
+        <div>{{ game.away }} ML: <span class="{{ 'positive' if game.away_ml and game.away_ml > 0 else 'negative' }}">{{ "%+d" % game.away_ml if game.away_ml is not none else "N/A" }}</span></div>
+        <div>{{ game.home }} ML: <span class="{{ 'positive' if game.home_ml and game.home_ml > 0 else 'negative' }}">{{ "%+d" % game.home_ml if game.home_ml is not none else "N/A" }}</span></div>
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -67,15 +77,31 @@
   <script>
     var REFRESH_INTERVAL_MS = 30000;
 
+    function fmtOdds(val) {
+      if (val === null || val === undefined) { return 'N/A'; }
+      return (val > 0 ? '+' : '') + val;
+    }
+
+    function oddsClass(val) {
+      return (val !== null && val !== undefined && val > 0) ? 'positive' : 'negative';
+    }
+
     function buildGameCard(game) {
       var label = game.status === 'live' ? 'Live' : game.status === 'final' ? 'Final' : 'Upcoming';
+      var oddsHtml = '';
+      if (game.away_ml !== null && game.away_ml !== undefined || game.home_ml !== null && game.home_ml !== undefined) {
+        oddsHtml = '<div class="odds">'
+          + '<div>' + game.away + ' ML: <span class="' + oddsClass(game.away_ml) + '">' + fmtOdds(game.away_ml) + '</span></div>'
+          + '<div>' + game.home + ' ML: <span class="' + oddsClass(game.home_ml) + '">' + fmtOdds(game.home_ml) + '</span></div>'
+          + '</div>';
+      }
       return '<div class="game ' + game.status + '">'
         + '<span class="status-badge">' + label + '</span>'
         + '<div class="matchup">'
         + '<div class="team"><div class="team-abbrev">' + game.away + '</div><div class="vs">AWAY</div></div>'
         + '<div><div class="score">' + game.away_score + ' – ' + game.home_score + '</div></div>'
         + '<div class="team"><div class="team-abbrev">' + game.home + '</div><div class="vs">HOME</div></div>'
-        + '</div></div>';
+        + '</div>' + oddsHtml + '</div>';
     }
 
     function refreshScores() {

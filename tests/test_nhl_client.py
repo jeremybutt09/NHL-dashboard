@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from app.agents.nhl_client import get_todays_games
+from app.agents.nhl_client import format_game, get_todays_games
 
 # ---------------------------------------------------------------------------
 # Fixtures / shared test data
@@ -113,3 +113,85 @@ def test_get_todays_games_calls_correct_url():
         mock_get.assert_called_once_with(
             "https://api-web.nhle.com/v1/scoreboard/now"
         )
+
+
+# ---------------------------------------------------------------------------
+# format_game money line odds (Issue #6)
+# ---------------------------------------------------------------------------
+
+GAME_WITH_ODDS = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2},
+    "awayTeam": {"abbrev": "MTL", "score": 1},
+    "odds": [
+        {"providerId": 1, "awayOdds": -120, "homeOdds": 105},
+    ],
+}
+
+GAME_PREGAME_WITH_ODDS = {
+    "gameState": "PRE",
+    "homeTeam": {"abbrev": "NYR"},
+    "awayTeam": {"abbrev": "BOS"},
+    "odds": [
+        {"providerId": 1, "awayOdds": 130, "homeOdds": -150},
+    ],
+}
+
+GAME_WITHOUT_ODDS = {
+    "gameState": "PRE",
+    "homeTeam": {"abbrev": "VGK"},
+    "awayTeam": {"abbrev": "EDM"},
+}
+
+GAME_MALFORMED_ODDS = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "FLA", "score": 3},
+    "awayTeam": {"abbrev": "CAR", "score": 2},
+    "odds": [{"providerId": 1}],
+}
+
+
+def test_format_game_includes_away_ml_when_odds_present():
+    """format_game returns away_ml from the first odds entry."""
+    result = format_game(GAME_WITH_ODDS)
+    assert result["away_ml"] == -120
+
+
+def test_format_game_includes_home_ml_when_odds_present():
+    """format_game returns home_ml from the first odds entry."""
+    result = format_game(GAME_WITH_ODDS)
+    assert result["home_ml"] == 105
+
+
+def test_format_game_pregame_odds_extracted():
+    """format_game extracts odds for a pregame (PRE state) game."""
+    result = format_game(GAME_PREGAME_WITH_ODDS)
+    assert result["away_ml"] == 130
+    assert result["home_ml"] == -150
+
+
+def test_format_game_away_ml_none_when_odds_missing():
+    """format_game returns away_ml=None when odds field is absent."""
+    result = format_game(GAME_WITHOUT_ODDS)
+    assert result["away_ml"] is None
+
+
+def test_format_game_home_ml_none_when_odds_missing():
+    """format_game returns home_ml=None when odds field is absent."""
+    result = format_game(GAME_WITHOUT_ODDS)
+    assert result["home_ml"] is None
+
+
+def test_format_game_odds_none_when_odds_list_empty():
+    """format_game returns None odds when the odds list is empty."""
+    game = {**GAME_WITHOUT_ODDS, "odds": []}
+    result = format_game(game)
+    assert result["away_ml"] is None
+    assert result["home_ml"] is None
+
+
+def test_format_game_odds_none_when_odds_keys_missing():
+    """format_game returns None odds when expected keys are absent from entry."""
+    result = format_game(GAME_MALFORMED_ODDS)
+    assert result["away_ml"] is None
+    assert result["home_ml"] is None

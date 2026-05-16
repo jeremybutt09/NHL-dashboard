@@ -204,3 +204,78 @@ def test_dashboard_auto_refresh_interval_value_present(client):
         html = response.data.decode("utf-8")
 
         assert "30000" in html
+
+
+# ---------------------------------------------------------------------------
+# Dashboard money line odds display (Issue #6)
+# ---------------------------------------------------------------------------
+
+MOCK_GAME_WITH_ODDS = {
+    "id": 5,
+    "gameDate": "2026-05-11",
+    "homeTeam": {"abbrev": "TOR", "score": 2},
+    "awayTeam": {"abbrev": "MTL", "score": 1},
+    "gameState": "LIVE",
+    "odds": [{"providerId": 1, "awayOdds": -120, "homeOdds": 105}],
+}
+
+MOCK_GAME_WITHOUT_ODDS = {
+    "id": 6,
+    "gameDate": "2026-05-11",
+    "homeTeam": {"abbrev": "NYR"},
+    "awayTeam": {"abbrev": "BOS"},
+    "gameState": "PRE",
+}
+
+
+def test_dashboard_displays_odds_when_available(client):
+    """GET /dashboard renders money line odds values when game has odds."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_WITH_ODDS]}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "-120" in html
+        assert "105" in html
+
+
+def test_dashboard_graceful_when_odds_missing(client):
+    """GET /dashboard renders without error when game has no odds."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_WITHOUT_ODDS]}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200
+
+
+def test_api_scores_includes_odds_fields(client):
+    """GET /api/scores returns away_ml and home_ml keys in each game dict."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_WITH_ODDS]}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert "away_ml" in data[0]
+        assert "home_ml" in data[0]
