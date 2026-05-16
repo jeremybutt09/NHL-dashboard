@@ -95,7 +95,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         try:
             raw_games = get_todays_games()
             return jsonify([_format_game_with_history(g) for g in raw_games])
-        except requests.HTTPError:
+        except requests.RequestException:
             return jsonify([])
 
     @app.route("/dashboard")
@@ -105,13 +105,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         Returns:
             Response: Rendered HTML page showing all of today's games grouped
                 by status (live, final, upcoming). Falls back to an empty-state
-                page if the NHL API is unavailable.
+                page with an error banner if the NHL API is unavailable.
         """
+        api_error = False
         try:
             raw_games = get_todays_games()
-        except requests.HTTPError:
+        except requests.RequestException:
             raw_games = []
+            api_error = True
         games = [_format_game_with_history(g) for g in raw_games]
-        return render_template("dashboard.html", games=games)
+        return render_template("dashboard.html", games=games, api_error=api_error)
 
     return app

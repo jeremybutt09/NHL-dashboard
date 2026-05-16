@@ -467,3 +467,88 @@ def test_dashboard_graceful_when_series_api_fails(client):
     with patch("app.agents.nhl_client.requests.get", side_effect=fake_get):
         response = client.get("/dashboard")
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Dashboard loading and error states (Issue #9)
+# ---------------------------------------------------------------------------
+
+
+def test_api_scores_returns_empty_list_on_connection_error(client):
+    """GET /api/scores returns HTTP 200 with empty list when NHL API is unreachable."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_get.side_effect = requests.ConnectionError("Connection refused")
+
+        response = client.get("/api/scores")
+
+        assert response.status_code == 200
+        assert response.get_json() == []
+
+
+def test_api_scores_returns_empty_list_on_timeout(client):
+    """GET /api/scores returns HTTP 200 with empty list when NHL API request times out."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_get.side_effect = requests.Timeout("Request timed out")
+
+        response = client.get("/api/scores")
+
+        assert response.status_code == 200
+        assert response.get_json() == []
+
+
+def test_dashboard_returns_200_on_connection_error(client):
+    """GET /dashboard returns HTTP 200 when NHL API is unreachable."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_get.side_effect = requests.ConnectionError("Connection refused")
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200
+
+
+def test_dashboard_shows_error_banner_when_api_fails(client):
+    """GET /dashboard renders a visible error banner when the NHL API is unavailable."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_get.side_effect = requests.ConnectionError("Connection refused")
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "error-banner" in html
+
+
+def test_dashboard_contains_loading_indicator(client):
+    """GET /dashboard HTML includes a loading indicator element for JS to show during refresh."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": []}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "loading-indicator" in html
+
+
+def test_dashboard_refresh_js_displays_error_on_failure(client):
+    """GET /dashboard JS catch handler shows error-banner on fetch failure (not silent)."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "focusedDate": "2026-05-11",
+            "gamesByDate": [{"date": "2026-05-11", "games": []}],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "error-banner" in html
+        assert ".catch(" in html

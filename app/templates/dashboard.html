@@ -40,10 +40,21 @@
     .result-pill.loss { background: #3a1a1a; color: #f85149; }
     .season-series { margin-top: 0.75rem; font-size: 0.72rem; color: #8b949e; }
     .season-series-label { font-weight: 700; color: #e6edf3; margin-right: 0.4rem; }
+    .loading-indicator { text-align: center; color: #8b949e; padding: 1rem 0; font-size: 0.85rem; }
+    .error-banner { background: #3a1a1a; border: 1px solid #f85149; border-radius: 6px; color: #f85149;
+      font-size: 0.85rem; padding: 0.75rem 1rem; margin-bottom: 1rem; }
   </style>
 </head>
 <body>
   <h1>NHL Scoreboard</h1>
+
+  <div id="loading-indicator" class="loading-indicator" style="display:none;">Refreshing scores…</div>
+
+  {% if api_error %}
+  <div id="error-banner" class="error-banner">Could not reach the NHL API. Scores may be unavailable.</div>
+  {% else %}
+  <div id="error-banner" class="error-banner" style="display:none;"></div>
+  {% endif %}
 
   <div id="games-container">
   {% if games %}
@@ -163,9 +174,14 @@
     }
 
     function refreshScores() {
+      var loadingEl = document.getElementById('loading-indicator');
+      var errorEl = document.getElementById('error-banner');
+      if (loadingEl) { loadingEl.style.display = 'block'; }
+      if (errorEl) { errorEl.style.display = 'none'; }
       fetch('/api/scores')
         .then(function(response) { return response.json(); })
         .then(function(games) {
+          if (loadingEl) { loadingEl.style.display = 'none'; }
           var container = document.getElementById('games-container');
           if (!container) { return; }
           if (games.length === 0) {
@@ -175,7 +191,11 @@
           }
         })
         .catch(function() {
-          // Silently ignore fetch errors — page stays usable during transient API failures
+          if (loadingEl) { loadingEl.style.display = 'none'; }
+          if (errorEl) {
+            errorEl.textContent = 'Could not reach the NHL API. Scores may be outdated.';
+            errorEl.style.display = 'block';
+          }
         });
     }
 
