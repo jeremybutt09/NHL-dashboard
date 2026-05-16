@@ -279,3 +279,114 @@ def test_api_scores_includes_odds_fields(client):
         assert len(data) == 1
         assert "away_ml" in data[0]
         assert "home_ml" in data[0]
+
+
+# ---------------------------------------------------------------------------
+# Team last-5 history on dashboard (Issue #7)
+# ---------------------------------------------------------------------------
+
+MOCK_GAME_FOR_HISTORY = {
+    "id": 7,
+    "gameDate": "2026-05-11",
+    "homeTeam": {"abbrev": "TOR", "score": 3},
+    "awayTeam": {"abbrev": "MTL", "score": 1},
+    "gameState": "LIVE",
+}
+
+_SINGLE_COMPLETED_GAME = {
+    "id": 200, "gameDate": "2026-04-01", "gameState": "FINAL",
+    "homeTeam": {"abbrev": "TOR", "score": 4},
+    "awayTeam": {"abbrev": "MTL", "score": 2},
+}
+
+
+def _make_fake_get(scoreboard_data, schedule_data):
+    """Return a side_effect callable that dispatches mock responses by URL."""
+    from unittest.mock import MagicMock
+
+    def fake_get(url):
+        mock = MagicMock()
+        if "scoreboard" in url:
+            mock.json.return_value = scoreboard_data
+        else:
+            mock.json.return_value = schedule_data
+        return mock
+
+    return fake_get
+
+
+def test_dashboard_includes_last5_fields(client):
+    """GET /dashboard renders win/loss history for each team in each game."""
+    scoreboard = {
+        "focusedDate": "2026-05-11",
+        "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_HISTORY]}],
+    }
+    schedule = {"games": [_SINGLE_COMPLETED_GAME]}
+
+    with patch(
+        "app.agents.nhl_client.requests.get",
+        side_effect=_make_fake_get(scoreboard, schedule),
+    ):
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "4-2" in html
+
+
+def test_dashboard_history_shows_win_result(client):
+    """GET /dashboard shows W for a won game in team history."""
+    scoreboard = {
+        "focusedDate": "2026-05-11",
+        "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_HISTORY]}],
+    }
+    schedule = {"games": [_SINGLE_COMPLETED_GAME]}
+
+    with patch(
+        "app.agents.nhl_client.requests.get",
+        side_effect=_make_fake_get(scoreboard, schedule),
+    ):
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "W" in html
+
+
+def test_dashboard_graceful_when_team_history_fails(client):
+    """GET /dashboard still renders with HTTP 200 when team history API calls fail."""
+    from unittest.mock import MagicMock
+
+    def fake_get(url):
+        mock = MagicMock()
+        if "scoreboard" in url:
+            mock.json.return_value = {
+                "focusedDate": "2026-05-11",
+                "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_HISTORY]}],
+            }
+        else:
+            mock.raise_for_status.side_effect = requests.HTTPError("503")
+        return mock
+
+    with patch("app.agents.nhl_client.requests.get", side_effect=fake_get):
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+
+
+def test_api_scores_includes_last5_fields(client):
+    """GET /api/scores returns away_last5 and home_last5 keys in each game dict."""
+    scoreboard = {
+        "focusedDate": "2026-05-11",
+        "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_HISTORY]}],
+    }
+    schedule = {"games": [_SINGLE_COMPLETED_GAME]}
+
+    with patch(
+        "app.agents.nhl_client.requests.get",
+        side_effect=_make_fake_get(scoreboard, schedule),
+    ):
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert "away_last5" in data[0]
+        assert "home_last5" in data[0]

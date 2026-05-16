@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from app.agents.nhl_client import format_game, get_todays_games
+from app.agents.nhl_client import format_game, get_team_last_5, get_todays_games
 
 # ---------------------------------------------------------------------------
 # Fixtures / shared test data
@@ -195,3 +195,222 @@ def test_format_game_odds_none_when_odds_keys_missing():
     result = format_game(GAME_MALFORMED_ODDS)
     assert result["away_ml"] is None
     assert result["home_ml"] is None
+
+
+# ---------------------------------------------------------------------------
+# get_team_last_5 and team history formatting (Issue #7)
+# ---------------------------------------------------------------------------
+
+MOCK_TOR_SCHEDULE = {
+    "games": [
+        {
+            "id": 100, "gameDate": "2026-04-01", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "TOR", "score": 4},
+            "awayTeam": {"abbrev": "MTL", "score": 2},
+        },
+        {
+            "id": 101, "gameDate": "2026-04-03", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "BOS", "score": 3},
+            "awayTeam": {"abbrev": "TOR", "score": 5},
+        },
+        {
+            "id": 102, "gameDate": "2026-04-05", "gameState": "OFF",
+            "homeTeam": {"abbrev": "TOR", "score": 2},
+            "awayTeam": {"abbrev": "NYR", "score": 3},
+        },
+        {
+            "id": 103, "gameDate": "2026-04-07", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "VGK", "score": 1},
+            "awayTeam": {"abbrev": "TOR", "score": 4},
+        },
+        {
+            "id": 104, "gameDate": "2026-04-09", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "TOR", "score": 3},
+            "awayTeam": {"abbrev": "EDM", "score": 1},
+        },
+        {
+            "id": 105, "gameDate": "2026-04-11", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "TOR", "score": 5},
+            "awayTeam": {"abbrev": "FLA", "score": 4},
+        },
+        {
+            "id": 106, "gameDate": "2026-05-15", "gameState": "PRE",
+            "homeTeam": {"abbrev": "TOR", "score": 0},
+            "awayTeam": {"abbrev": "CAR", "score": 0},
+        },
+    ]
+}
+
+
+def test_get_team_last_5_returns_list():
+    """get_team_last_5 returns a list on a successful response."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_TOR_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert isinstance(result, list)
+
+
+def test_get_team_last_5_returns_at_most_5_games():
+    """get_team_last_5 returns at most 5 results even when more completed games exist."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_TOR_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert len(result) <= 5
+
+
+def test_get_team_last_5_excludes_noncompleted_games():
+    """get_team_last_5 counts 5 most recent FINAL/OFF games, skipping PRE/LIVE."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_TOR_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert len(result) == 5
+
+
+def test_get_team_last_5_returns_empty_when_no_completed_games():
+    """get_team_last_5 returns empty list when no completed games exist."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": []}
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert result == []
+
+
+def test_get_team_last_5_raises_on_http_error():
+    """get_team_last_5 propagates HTTPError when the API returns a non-2xx status."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(requests.HTTPError):
+            get_team_last_5("TOR")
+
+
+def test_get_team_last_5_calls_correct_url():
+    """get_team_last_5 requests the correct NHL schedule endpoint for the given team."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": []}
+        mock_get.return_value = mock_resp
+
+        get_team_last_5("TOR")
+
+        mock_get.assert_called_once_with(
+            "https://api-web.nhle.com/v1/club-schedule-season/TOR/now"
+        )
+
+
+def test_get_team_last_5_result_win_as_home():
+    """get_team_last_5 returns 'W' when the queried team is the home winner."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 100, "gameDate": "2026-04-01", "gameState": "FINAL",
+                    "homeTeam": {"abbrev": "TOR", "score": 4},
+                    "awayTeam": {"abbrev": "MTL", "score": 2},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert result[0]["result"] == "W"
+
+
+def test_get_team_last_5_result_loss_as_home():
+    """get_team_last_5 returns 'L' when the queried team is the home loser."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 100, "gameDate": "2026-04-01", "gameState": "FINAL",
+                    "homeTeam": {"abbrev": "TOR", "score": 1},
+                    "awayTeam": {"abbrev": "MTL", "score": 3},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert result[0]["result"] == "L"
+
+
+def test_get_team_last_5_result_win_as_away():
+    """get_team_last_5 returns 'W' when the queried team is the away winner."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 100, "gameDate": "2026-04-01", "gameState": "FINAL",
+                    "homeTeam": {"abbrev": "BOS", "score": 2},
+                    "awayTeam": {"abbrev": "TOR", "score": 5},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert result[0]["result"] == "W"
+
+
+def test_get_team_last_5_result_contains_score():
+    """get_team_last_5 returns team score vs opponent score in each result."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 100, "gameDate": "2026-04-01", "gameState": "FINAL",
+                    "homeTeam": {"abbrev": "TOR", "score": 4},
+                    "awayTeam": {"abbrev": "MTL", "score": 2},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        result = get_team_last_5("TOR")
+
+        assert result[0]["score"] == "4-2"
+
+
+def test_format_game_includes_away_last5():
+    """format_game includes away_last5 when history is provided."""
+    history = [{"result": "W", "score": "4-2"}]
+    result = format_game(GAME_WITH_ODDS, away_history=history)
+    assert result["away_last5"] == history
+
+
+def test_format_game_includes_home_last5():
+    """format_game includes home_last5 when history is provided."""
+    history = [{"result": "L", "score": "2-3"}]
+    result = format_game(GAME_WITH_ODDS, home_history=history)
+    assert result["home_last5"] == history
+
+
+def test_format_game_last5_defaults_to_empty_list():
+    """format_game sets away_last5 and home_last5 to empty lists when not provided."""
+    result = format_game(GAME_WITH_ODDS)
+    assert result["away_last5"] == []
+    assert result["home_last5"] == []

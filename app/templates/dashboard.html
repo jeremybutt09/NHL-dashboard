@@ -32,6 +32,12 @@
     .odds span { font-weight: 600; }
     .odds .positive { color: #3fb950; }
     .odds .negative { color: #f85149; }
+    .history { margin-top: 0.75rem; font-size: 0.72rem; color: #8b949e; }
+    .history-row { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.2rem; }
+    .history-label { font-weight: 700; min-width: 2.5rem; color: #e6edf3; }
+    .result-pill { padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 700; font-size: 0.68rem; }
+    .result-pill.win { background: #1a3a22; color: #3fb950; }
+    .result-pill.loss { background: #3a1a1a; color: #f85149; }
   </style>
 </head>
 <body>
@@ -66,6 +72,22 @@
         <div>{{ game.home }} ML: <span class="{{ 'positive' if game.home_ml and game.home_ml > 0 else 'negative' }}">{{ "%+d" % game.home_ml if game.home_ml is not none else "N/A" }}</span></div>
       </div>
       {% endif %}
+      {% if game.away_last5 or game.home_last5 %}
+      <div class="history">
+        <div class="history-row">
+          <span class="history-label">{{ game.away }}</span>
+          {% for r in game.away_last5 %}
+          <span class="result-pill {{ 'win' if r.result == 'W' else 'loss' }}">{{ r.result }} {{ r.score }}</span>
+          {% endfor %}
+        </div>
+        <div class="history-row">
+          <span class="history-label">{{ game.home }}</span>
+          {% for r in game.home_last5 %}
+          <span class="result-pill {{ 'win' if r.result == 'W' else 'loss' }}">{{ r.result }} {{ r.score }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -86,6 +108,14 @@
       return (val !== null && val !== undefined && val > 0) ? 'positive' : 'negative';
     }
 
+    function buildResultPills(history) {
+      if (!history || history.length === 0) { return ''; }
+      return history.map(function(r) {
+        var cls = r.result === 'W' ? 'win' : 'loss';
+        return '<span class="result-pill ' + cls + '">' + r.result + ' ' + r.score + '</span>';
+      }).join('');
+    }
+
     function buildGameCard(game) {
       var label = game.status === 'live' ? 'Live' : game.status === 'final' ? 'Final' : 'Upcoming';
       var oddsHtml = '';
@@ -95,13 +125,22 @@
           + '<div>' + game.home + ' ML: <span class="' + oddsClass(game.home_ml) + '">' + fmtOdds(game.home_ml) + '</span></div>'
           + '</div>';
       }
+      var historyHtml = '';
+      var awayPills = buildResultPills(game.away_last5);
+      var homePills = buildResultPills(game.home_last5);
+      if (awayPills || homePills) {
+        historyHtml = '<div class="history">'
+          + '<div class="history-row"><span class="history-label">' + game.away + '</span>' + awayPills + '</div>'
+          + '<div class="history-row"><span class="history-label">' + game.home + '</span>' + homePills + '</div>'
+          + '</div>';
+      }
       return '<div class="game ' + game.status + '">'
         + '<span class="status-badge">' + label + '</span>'
         + '<div class="matchup">'
         + '<div class="team"><div class="team-abbrev">' + game.away + '</div><div class="vs">AWAY</div></div>'
         + '<div><div class="score">' + game.away_score + ' – ' + game.home_score + '</div></div>'
         + '<div class="team"><div class="team-abbrev">' + game.home + '</div><div class="vs">HOME</div></div>'
-        + '</div>' + oddsHtml + '</div>';
+        + '</div>' + oddsHtml + historyHtml + '</div>';
     }
 
     function refreshScores() {

@@ -2,7 +2,7 @@
 import requests
 from flask import Flask, jsonify, render_template
 
-from app.agents.nhl_client import format_game, get_todays_games
+from app.agents.nhl_client import format_game, get_team_last_5, get_todays_games
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -42,19 +42,44 @@ def create_app(test_config: dict | None = None) -> Flask:
         except requests.HTTPError as exc:
             return jsonify({"error": str(exc)}), 502
 
+    def _format_game_with_history(game: dict) -> dict:
+        """Enrich a raw game dict with team history before formatting.
+
+        Calls get_team_last_5 for both teams.  Silently falls back to an
+        empty list for either team if the history API is unavailable.
+
+        Args:
+            game: Raw game dict from the NHL scoreboard API.
+
+        Returns:
+            dict: Formatted game dict including away_last5 and home_last5.
+        """
+        away_abbrev = game.get("awayTeam", {}).get("abbrev", "")
+        home_abbrev = game.get("homeTeam", {}).get("abbrev", "")
+        try:
+            away_hist = get_team_last_5(away_abbrev)
+        except requests.HTTPError:
+            away_hist = []
+        try:
+            home_hist = get_team_last_5(home_abbrev)
+        except requests.HTTPError:
+            home_hist = []
+        return format_game(game, away_history=away_hist, home_history=home_hist)
+
     @app.route("/api/scores")
     def api_scores():
         """Return today's formatted NHL game scores as JSON for auto-refresh polling.
 
         Returns:
             Response: JSON array of formatted game dicts (keys: away, home,
-                away_score, home_score, status). Returns an empty list with
-                HTTP 200 when the upstream NHL API is unavailable, so the
-                polling client does not break on transient failures.
+                away_score, home_score, status, away_last5, home_last5).
+                Returns an empty list with HTTP 200 when the upstream NHL API
+                is unavailable, so the polling client does not break on
+                transient failures.
         """
         try:
             raw_games = get_todays_games()
-            return jsonify([format_game(g) for g in raw_games])
+            return jsonify([_format_game_with_history(g) for g in raw_games])
         except requests.HTTPError:
             return jsonify([])
 
@@ -71,7 +96,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             raw_games = get_todays_games()
         except requests.HTTPError:
             raw_games = []
-        games = [format_game(g) for g in raw_games]
+        games = [_format_game_with_history(g) for g in raw_games]
         return render_template("dashboard.html", games=games)
 
     return app
