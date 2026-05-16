@@ -48,7 +48,15 @@ Closes #ISSUE_NUMBER"
 
 Do not use `git add -A` or `git add .` — stage specific files only.
 
-## Step 5 — Close the issue on GitHub
+## Step 5 — Push to GitHub
+
+```
+git push
+```
+
+Confirm the push succeeded before continuing.
+
+## Step 6 — Close the issue on GitHub
 
 ```
 gh issue close ISSUE_NUMBER
@@ -58,7 +66,8 @@ gh issue close ISSUE_NUMBER
 
 - Do not commit unrelated files or refactors
 - Do not skip the failing-test step — TDD is mandatory
-- Do not close the issue until the commit is confirmed in `git log`
+- Do not push until `git log` confirms the commit is present
+- Do not close the issue until the push has succeeded
 - If an assumption is required, document it in the commit message body
 
 ---
