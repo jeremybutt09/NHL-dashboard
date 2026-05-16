@@ -38,6 +38,8 @@
     .result-pill { padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 700; font-size: 0.68rem; }
     .result-pill.win { background: #1a3a22; color: #3fb950; }
     .result-pill.loss { background: #3a1a1a; color: #f85149; }
+    .season-series { margin-top: 0.75rem; font-size: 0.72rem; color: #8b949e; }
+    .season-series-label { font-weight: 700; color: #e6edf3; margin-right: 0.4rem; }
   </style>
 </head>
 <body>
@@ -70,6 +72,13 @@
       <div class="odds">
         <div>{{ game.away }} ML: <span class="{{ 'positive' if game.away_ml and game.away_ml > 0 else 'negative' }}">{{ "%+d" % game.away_ml if game.away_ml is not none else "N/A" }}</span></div>
         <div>{{ game.home }} ML: <span class="{{ 'positive' if game.home_ml and game.home_ml > 0 else 'negative' }}">{{ "%+d" % game.home_ml if game.home_ml is not none else "N/A" }}</span></div>
+      </div>
+      {% endif %}
+      {% if game.season_series is not none %}
+      <div class="season-series">
+        <span class="season-series-label">Season Series:</span>
+        {{ game.away }} {{ game.season_series.away_wins }} – {{ game.season_series.home_wins }} {{ game.home }}
+        ({{ game.season_series.meetings }} meeting{{ 's' if game.season_series.meetings != 1 else '' }})
       </div>
       {% endif %}
       {% if game.away_last5 or game.home_last5 %}
@@ -125,6 +134,16 @@
           + '<div>' + game.home + ' ML: <span class="' + oddsClass(game.home_ml) + '">' + fmtOdds(game.home_ml) + '</span></div>'
           + '</div>';
       }
+      var seriesHtml = '';
+      if (game.season_series !== null && game.season_series !== undefined) {
+        var s = game.season_series;
+        var mtg = s.meetings === 1 ? '1 meeting' : s.meetings + ' meetings';
+        seriesHtml = '<div class="season-series">'
+          + '<span class="season-series-label">Season Series:</span>'
+          + game.away + ' ' + s.away_wins + ' – ' + s.home_wins + ' ' + game.home
+          + ' (' + mtg + ')'
+          + '</div>';
+      }
       var historyHtml = '';
       var awayPills = buildResultPills(game.away_last5);
       var homePills = buildResultPills(game.home_last5);
@@ -140,7 +159,7 @@
         + '<div class="team"><div class="team-abbrev">' + game.away + '</div><div class="vs">AWAY</div></div>'
         + '<div><div class="score">' + game.away_score + ' – ' + game.home_score + '</div></div>'
         + '<div class="team"><div class="team-abbrev">' + game.home + '</div><div class="vs">HOME</div></div>'
-        + '</div>' + oddsHtml + historyHtml + '</div>';
+        + '</div>' + oddsHtml + seriesHtml + historyHtml + '</div>';
     }
 
     function refreshScores() {

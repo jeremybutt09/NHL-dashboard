@@ -78,6 +78,55 @@ def _format_team_game_result(game: dict, team_abbrev: str) -> dict:
     return {"result": result, "score": f"{team_score}-{opp_score}"}
 
 
+def get_season_series(away_abbrev: str, home_abbrev: str) -> dict:
+    """Fetches the season series record between two teams using the away team's schedule.
+
+    Args:
+        away_abbrev: Three-letter abbreviation of the team playing away today.
+        home_abbrev: Three-letter abbreviation of the team playing at home today.
+
+    Returns:
+        dict: Season series summary with keys:
+            - ``away_wins`` (int): Wins credited to the away team.
+            - ``home_wins`` (int): Wins credited to the home team.
+            - ``meetings`` (int): Total completed matchups between the two teams.
+
+    Raises:
+        requests.HTTPError: If the API responds with a non-2xx HTTP status.
+    """
+    url = NHL_TEAM_SCHEDULE_URL.format(away_abbrev)
+    response = requests.get(url)
+    response.raise_for_status()
+
+    games = response.json().get("games", [])
+    matchups = [
+        g for g in games
+        if g.get("gameState") in _FINAL_STATES
+        and home_abbrev in (
+            g.get("homeTeam", {}).get("abbrev"),
+            g.get("awayTeam", {}).get("abbrev"),
+        )
+    ]
+
+    away_wins = 0
+    home_wins = 0
+    for g in matchups:
+        home = g.get("homeTeam", {})
+        away = g.get("awayTeam", {})
+        home_score = home.get("score", 0)
+        away_score = away.get("score", 0)
+        if home_score > away_score:
+            winner = home.get("abbrev")
+        else:
+            winner = away.get("abbrev")
+        if winner == away_abbrev:
+            away_wins += 1
+        else:
+            home_wins += 1
+
+    return {"away_wins": away_wins, "home_wins": home_wins, "meetings": len(matchups)}
+
+
 def _extract_moneyline(game: dict) -> tuple:
     """Extracts away and home money line odds from a game object.
 
@@ -106,6 +155,7 @@ def format_game(
     game: dict,
     away_history: list | None = None,
     home_history: list | None = None,
+    season_series: dict | None = None,
 ) -> dict:
     """Normalizes a raw NHL API game object for dashboard display.
 
@@ -117,6 +167,9 @@ def format_game(
             entry is ``{"result": "W"|"L", "score": "X-Y"}``.  Defaults to
             an empty list when not provided.
         home_history: Same as ``away_history`` but for the home team.
+        season_series: Season series record between the two teams, with keys
+            ``away_wins``, ``home_wins``, and ``meetings``.  Defaults to None
+            when unavailable.
 
     Returns:
         dict: Simplified game with keys:
@@ -130,6 +183,7 @@ def format_game(
             - ``home_ml`` (int | None): Home team money line odds, or None.
             - ``away_last5`` (list): Last 5 completed results for away team.
             - ``home_last5`` (list): Last 5 completed results for home team.
+            - ``season_series`` (dict | None): Season series summary, or None.
     """
     state = game.get("gameState", "")
     if state in _LIVE_STATES:
@@ -153,4 +207,5 @@ def format_game(
         "home_ml": home_ml,
         "away_last5": away_history if away_history is not None else [],
         "home_last5": home_history if home_history is not None else [],
+        "season_series": season_series,
     }

@@ -390,3 +390,80 @@ def test_api_scores_includes_last5_fields(client):
         assert len(data) == 1
         assert "away_last5" in data[0]
         assert "home_last5" in data[0]
+
+
+# ---------------------------------------------------------------------------
+# Season series on dashboard (Issue #8)
+# ---------------------------------------------------------------------------
+
+MOCK_GAME_FOR_SERIES = {
+    "id": 8,
+    "gameDate": "2026-05-11",
+    "homeTeam": {"abbrev": "TOR", "score": 2},
+    "awayTeam": {"abbrev": "MTL", "score": 1},
+    "gameState": "LIVE",
+}
+
+_SERIES_COMPLETED_GAME = {
+    "id": 300, "gameDate": "2026-03-01", "gameState": "FINAL",
+    "homeTeam": {"abbrev": "TOR", "score": 4},
+    "awayTeam": {"abbrev": "MTL", "score": 2},
+}
+
+
+def test_api_scores_includes_season_series_field(client):
+    """GET /api/scores returns a season_series key in each game dict."""
+    scoreboard = {
+        "focusedDate": "2026-05-11",
+        "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_SERIES]}],
+    }
+    schedule = {"games": [_SERIES_COMPLETED_GAME]}
+
+    with patch(
+        "app.agents.nhl_client.requests.get",
+        side_effect=_make_fake_get(scoreboard, schedule),
+    ):
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert "season_series" in data[0]
+
+
+def test_dashboard_displays_season_series(client):
+    """GET /dashboard renders season series wins when series data is available."""
+    scoreboard = {
+        "focusedDate": "2026-05-11",
+        "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_SERIES]}],
+    }
+    schedule = {"games": [_SERIES_COMPLETED_GAME]}
+
+    with patch(
+        "app.agents.nhl_client.requests.get",
+        side_effect=_make_fake_get(scoreboard, schedule),
+    ):
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "season" in html.lower() or "series" in html.lower()
+
+
+def test_dashboard_graceful_when_series_api_fails(client):
+    """GET /dashboard still renders HTTP 200 when season series API call fails."""
+    from unittest.mock import MagicMock
+
+    def fake_get(url):
+        mock = MagicMock()
+        if "scoreboard" in url:
+            mock.json.return_value = {
+                "focusedDate": "2026-05-11",
+                "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_FOR_SERIES]}],
+            }
+        else:
+            mock.raise_for_status.side_effect = requests.HTTPError("503")
+        return mock
+
+    with patch("app.agents.nhl_client.requests.get", side_effect=fake_get):
+        response = client.get("/dashboard")
+        assert response.status_code == 200

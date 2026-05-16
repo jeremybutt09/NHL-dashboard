@@ -2,7 +2,12 @@
 import requests
 from flask import Flask, jsonify, render_template
 
-from app.agents.nhl_client import format_game, get_team_last_5, get_todays_games
+from app.agents.nhl_client import (
+    format_game,
+    get_season_series,
+    get_team_last_5,
+    get_todays_games,
+)
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -43,16 +48,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": str(exc)}), 502
 
     def _format_game_with_history(game: dict) -> dict:
-        """Enrich a raw game dict with team history before formatting.
+        """Enrich a raw game dict with team history and season series before formatting.
 
-        Calls get_team_last_5 for both teams.  Silently falls back to an
-        empty list for either team if the history API is unavailable.
+        Calls get_team_last_5 for both teams and get_season_series for the
+        matchup.  Silently falls back to empty lists / None on API failure.
 
         Args:
             game: Raw game dict from the NHL scoreboard API.
 
         Returns:
-            dict: Formatted game dict including away_last5 and home_last5.
+            dict: Formatted game dict including away_last5, home_last5, and
+                season_series.
         """
         away_abbrev = game.get("awayTeam", {}).get("abbrev", "")
         home_abbrev = game.get("homeTeam", {}).get("abbrev", "")
@@ -64,7 +70,16 @@ def create_app(test_config: dict | None = None) -> Flask:
             home_hist = get_team_last_5(home_abbrev)
         except requests.HTTPError:
             home_hist = []
-        return format_game(game, away_history=away_hist, home_history=home_hist)
+        try:
+            series = get_season_series(away_abbrev, home_abbrev)
+        except requests.HTTPError:
+            series = None
+        return format_game(
+            game,
+            away_history=away_hist,
+            home_history=home_hist,
+            season_series=series,
+        )
 
     @app.route("/api/scores")
     def api_scores():

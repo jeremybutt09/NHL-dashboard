@@ -414,3 +414,159 @@ def test_format_game_last5_defaults_to_empty_list():
     result = format_game(GAME_WITH_ODDS)
     assert result["away_last5"] == []
     assert result["home_last5"] == []
+
+
+# ---------------------------------------------------------------------------
+# get_season_series and season_series in format_game (Issue #8)
+# ---------------------------------------------------------------------------
+
+# MTL is away today, TOR is home today.
+# Game 200: TOR wins at home → home_wins++
+# Game 201: MTL wins at home (MTL is today's away team) → away_wins++
+# Game 202: TOR wins on road (away team wins) → home_wins++
+# Game 203: different opponent — filtered out
+# Game 204: upcoming — filtered out
+MOCK_SERIES_SCHEDULE = {
+    "games": [
+        {
+            "id": 200, "gameDate": "2026-01-10", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "TOR", "score": 4},
+            "awayTeam": {"abbrev": "MTL", "score": 2},
+        },
+        {
+            "id": 201, "gameDate": "2026-02-15", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "MTL", "score": 3},
+            "awayTeam": {"abbrev": "TOR", "score": 1},
+        },
+        {
+            "id": 202, "gameDate": "2026-03-20", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "MTL", "score": 2},
+            "awayTeam": {"abbrev": "TOR", "score": 5},
+        },
+        {
+            "id": 203, "gameDate": "2026-04-01", "gameState": "FINAL",
+            "homeTeam": {"abbrev": "MTL", "score": 3},
+            "awayTeam": {"abbrev": "BOS", "score": 2},
+        },
+        {
+            "id": 204, "gameDate": "2026-05-16", "gameState": "PRE",
+            "homeTeam": {"abbrev": "TOR", "score": 0},
+            "awayTeam": {"abbrev": "MTL", "score": 0},
+        },
+    ]
+}
+
+
+def test_get_season_series_returns_dict():
+    """get_season_series returns a dict with away_wins, home_wins, meetings keys."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SERIES_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_season_series("MTL", "TOR")
+
+        assert isinstance(result, dict)
+        assert "away_wins" in result
+        assert "home_wins" in result
+        assert "meetings" in result
+
+
+def test_get_season_series_counts_meetings():
+    """get_season_series counts only completed games between the two teams."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SERIES_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_season_series("MTL", "TOR")
+
+        assert result["meetings"] == 3
+
+
+def test_get_season_series_counts_away_wins():
+    """get_season_series counts wins for the away team (today's context)."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SERIES_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_season_series("MTL", "TOR")
+
+        assert result["away_wins"] == 1
+
+
+def test_get_season_series_counts_home_wins():
+    """get_season_series counts wins for the home team (today's context)."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SERIES_SCHEDULE
+        mock_get.return_value = mock_resp
+
+        result = get_season_series("MTL", "TOR")
+
+        assert result["home_wins"] == 2
+
+
+def test_get_season_series_no_meetings():
+    """get_season_series returns zeros when no completed matchups exist."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": []}
+        mock_get.return_value = mock_resp
+
+        result = get_season_series("MTL", "TOR")
+
+        assert result == {"away_wins": 0, "home_wins": 0, "meetings": 0}
+
+
+def test_get_season_series_raises_on_http_error():
+    """get_season_series propagates HTTPError when the API returns a non-2xx status."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(requests.HTTPError):
+            get_season_series("MTL", "TOR")
+
+
+def test_get_season_series_calls_correct_url():
+    """get_season_series requests the away team's schedule endpoint."""
+    from app.agents.nhl_client import get_season_series
+
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": []}
+        mock_get.return_value = mock_resp
+
+        get_season_series("MTL", "TOR")
+
+        mock_get.assert_called_once_with(
+            "https://api-web.nhle.com/v1/club-schedule-season/MTL/now"
+        )
+
+
+def test_format_game_includes_season_series():
+    """format_game includes season_series when provided."""
+    series = {"away_wins": 1, "home_wins": 2, "meetings": 3}
+    result = format_game(GAME_WITH_ODDS, season_series=series)
+    assert result["season_series"] == series
+
+
+def test_format_game_season_series_defaults_to_none():
+    """format_game sets season_series to None when not provided."""
+    result = format_game(GAME_WITH_ODDS)
+    assert result["season_series"] is None
