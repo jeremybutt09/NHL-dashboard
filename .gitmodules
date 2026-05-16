@@ -1,0 +1,3 @@
+[submodule "ai-skills/pm-skills"]
+	path = ai-skills/pm-skills
+	url = https://github.com/deanpeters/Product-Manager-Skills.git
