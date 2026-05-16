@@ -611,3 +611,145 @@ def test_dashboard_renders_without_error_when_team_odds_absent(client):
         response = client.get("/dashboard")
 
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Sportsbook partner logo and link (Issue #21)
+# ---------------------------------------------------------------------------
+
+MOCK_SCORE_NOW_WITH_PARTNER = {
+    "oddsPartners": [
+        {"partnerId": 1, "imageUrl": "http://logo.example.com/partner.png", "siteUrl": "http://bet.example.com"},
+    ],
+    "games": [
+        {
+            "id": 21,
+            "gameDate": "2026-05-11",
+            "gameState": "LIVE",
+            "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+            "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+        }
+    ],
+}
+
+
+def test_dashboard_displays_partner_logo_when_available(client):
+    """GET /dashboard renders the partner logo img tag when oddsPartners are present."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW_WITH_PARTNER
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "http://logo.example.com/partner.png" in html
+
+
+def test_dashboard_partner_logo_links_to_site_url(client):
+    """GET /dashboard wraps the partner logo in a link to siteUrl."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW_WITH_PARTNER
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "http://bet.example.com" in html
+
+
+def test_dashboard_renders_without_error_when_partner_missing(client):
+    """GET /dashboard renders HTTP 200 when no oddsPartners are in the response."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 22,
+                    "gameDate": "2026-05-11",
+                    "gameState": "PRE",
+                    "homeTeam": {"abbrev": "VGK"},
+                    "awayTeam": {"abbrev": "EDM"},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200
+
+
+def test_dashboard_renders_odds_when_logo_missing(client):
+    """GET /dashboard still shows odds even when partner has no imageUrl."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "oddsPartners": [{"partnerId": 1, "siteUrl": "http://bet.example.com"}],
+            "games": [
+                {
+                    "id": 23,
+                    "gameDate": "2026-05-11",
+                    "gameState": "LIVE",
+                    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+                    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+                }
+            ],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "-120" in html
+        assert "105" in html
+
+
+def test_dashboard_renders_logo_when_site_url_missing(client):
+    """GET /dashboard shows the logo even when partner siteUrl is absent."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "oddsPartners": [{"partnerId": 1, "imageUrl": "http://logo.example.com/partner.png"}],
+            "games": [
+                {
+                    "id": 24,
+                    "gameDate": "2026-05-11",
+                    "gameState": "LIVE",
+                    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+                    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+                }
+            ],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "http://logo.example.com/partner.png" in html
+
+
+def test_api_scores_includes_odds_partner_field(client):
+    """GET /api/scores returns odds_partner key in each game dict."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW_WITH_PARTNER
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert "odds_partner" in data[0]
+        assert data[0]["odds_partner"]["logo_url"] == "http://logo.example.com/partner.png"
+        assert data[0]["odds_partner"]["site_url"] == "http://bet.example.com"

@@ -5,6 +5,7 @@ import pytest
 import requests
 
 from app.agents.nhl_client import (
+    extract_odds_partner,
     extract_team_odds,
     format_game,
     get_team_last_5,
@@ -726,3 +727,144 @@ def test_format_game_team_odds_none_when_no_team_level_odds():
     result = format_game(GAME_WITHOUT_TEAM_ODDS)
     assert result["away_ml"] is None
     assert result["home_ml"] is None
+
+
+# ---------------------------------------------------------------------------
+# extract_odds_partner (Issue #21)
+# ---------------------------------------------------------------------------
+
+PARTNER_LIST = [
+    {"partnerId": 1, "imageUrl": "http://logo.png", "siteUrl": "http://bet.com"},
+    {"partnerId": 2, "imageUrl": "http://other.png", "siteUrl": "http://other.com"},
+]
+
+
+def test_extract_odds_partner_returns_matching_partner():
+    """extract_odds_partner returns logo_url and site_url for a matching partnerId."""
+    result = extract_odds_partner(PARTNER_LIST, 1)
+    assert result == {"logo_url": "http://logo.png", "site_url": "http://bet.com"}
+
+
+def test_extract_odds_partner_returns_second_partner():
+    """extract_odds_partner returns the correct partner when there are multiple."""
+    result = extract_odds_partner(PARTNER_LIST, 2)
+    assert result == {"logo_url": "http://other.png", "site_url": "http://other.com"}
+
+
+def test_extract_odds_partner_returns_empty_when_no_match():
+    """extract_odds_partner returns empty dict when no partner matches the provider_id."""
+    result = extract_odds_partner(PARTNER_LIST, 99)
+    assert result == {}
+
+
+def test_extract_odds_partner_returns_empty_when_provider_id_none():
+    """extract_odds_partner returns empty dict when provider_id is None."""
+    result = extract_odds_partner(PARTNER_LIST, None)
+    assert result == {}
+
+
+def test_extract_odds_partner_returns_empty_when_partners_empty():
+    """extract_odds_partner returns empty dict when the partners list is empty."""
+    result = extract_odds_partner([], 1)
+    assert result == {}
+
+
+def test_extract_odds_partner_handles_missing_image_url():
+    """extract_odds_partner returns logo_url=None when imageUrl is absent."""
+    partners = [{"partnerId": 1, "siteUrl": "http://bet.com"}]
+    result = extract_odds_partner(partners, 1)
+    assert result == {"logo_url": None, "site_url": "http://bet.com"}
+
+
+def test_extract_odds_partner_handles_missing_site_url():
+    """extract_odds_partner returns site_url=None when siteUrl is absent."""
+    partners = [{"partnerId": 1, "imageUrl": "http://logo.png"}]
+    result = extract_odds_partner(partners, 1)
+    assert result == {"logo_url": "http://logo.png", "site_url": None}
+
+
+# ---------------------------------------------------------------------------
+# get_todays_score_now oddsPartners injection (Issue #21)
+# ---------------------------------------------------------------------------
+
+MOCK_SCORE_NOW_WITH_PARTNERS = {
+    "currentDate": "2026-05-11",
+    "oddsPartners": [
+        {"partnerId": 1, "imageUrl": "http://logo.png", "siteUrl": "http://bet.com"},
+    ],
+    "games": [
+        {
+            "id": 10,
+            "gameState": "LIVE",
+            "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+            "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+        }
+    ],
+}
+
+
+def test_get_todays_score_now_injects_odds_partners():
+    """get_todays_score_now injects top-level oddsPartners into each game dict."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW_WITH_PARTNERS
+        mock_get.return_value = mock_resp
+
+        result = get_todays_score_now()
+
+        assert "oddsPartners" in result[0]
+        assert len(result[0]["oddsPartners"]) == 1
+        assert result[0]["oddsPartners"][0]["partnerId"] == 1
+
+
+def test_get_todays_score_now_injects_empty_odds_partners_when_absent():
+    """get_todays_score_now sets oddsPartners to [] when key is missing from response."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": [{"id": 1}]}
+        mock_get.return_value = mock_resp
+
+        result = get_todays_score_now()
+
+        assert result[0]["oddsPartners"] == []
+
+
+# ---------------------------------------------------------------------------
+# format_game with odds_partner (Issue #21)
+# ---------------------------------------------------------------------------
+
+GAME_WITH_PARTNER_ODDS = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+    "oddsPartners": [
+        {"partnerId": 1, "imageUrl": "http://logo.png", "siteUrl": "http://bet.com"},
+    ],
+}
+
+GAME_WITH_NO_PARTNER_MATCH = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 99, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 99, "value": "-120"}]},
+    "oddsPartners": [
+        {"partnerId": 1, "imageUrl": "http://logo.png", "siteUrl": "http://bet.com"},
+    ],
+}
+
+
+def test_format_game_includes_odds_partner_when_matched():
+    """format_game includes odds_partner dict when provider matches a partner."""
+    result = format_game(GAME_WITH_PARTNER_ODDS)
+    assert result["odds_partner"] == {"logo_url": "http://logo.png", "site_url": "http://bet.com"}
+
+
+def test_format_game_odds_partner_is_none_when_no_odds_partners():
+    """format_game sets odds_partner to None when oddsPartners is absent."""
+    result = format_game(GAME_WITH_TEAM_ODDS)
+    assert result["odds_partner"] is None
+
+
+def test_format_game_odds_partner_is_none_when_provider_id_not_matched():
+    """format_game sets odds_partner to None when no partner matches the provider_id."""
+    result = format_game(GAME_WITH_NO_PARTNER_MATCH)
+    assert result["odds_partner"] is None

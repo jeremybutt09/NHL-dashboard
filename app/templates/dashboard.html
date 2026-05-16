@@ -40,6 +40,8 @@
     .result-pill.loss { background: #3a1a1a; color: #f85149; }
     .season-series { margin-top: 0.75rem; font-size: 0.72rem; color: #8b949e; }
     .season-series-label { font-weight: 700; color: #e6edf3; margin-right: 0.4rem; }
+    .odds-partner { margin-top: 0.6rem; text-align: right; }
+    .partner-logo { max-height: 24px; max-width: 80px; vertical-align: middle; opacity: 0.85; }
     .loading-indicator { text-align: center; color: #8b949e; padding: 1rem 0; font-size: 0.85rem; }
     .error-banner { background: #3a1a1a; border: 1px solid #f85149; border-radius: 6px; color: #f85149;
       font-size: 0.85rem; padding: 0.75rem 1rem; margin-bottom: 1rem; }
@@ -83,6 +85,21 @@
       <div class="odds">
         <div>{{ game.away }} ML: <span class="{{ 'positive' if game.away_ml and game.away_ml > 0 else 'negative' }}">{{ "%+d" % game.away_ml if game.away_ml is not none else "N/A" }}</span></div>
         <div>{{ game.home }} ML: <span class="{{ 'positive' if game.home_ml and game.home_ml > 0 else 'negative' }}">{{ "%+d" % game.home_ml if game.home_ml is not none else "N/A" }}</span></div>
+      </div>
+      {% endif %}
+      {% if game.odds_partner %}
+      <div class="odds-partner">
+        {% if game.odds_partner.logo_url %}
+          {% if game.odds_partner.site_url %}
+          <a href="{{ game.odds_partner.site_url }}" target="_blank" rel="noopener noreferrer">
+            <img src="{{ game.odds_partner.logo_url }}" alt="Sportsbook partner" class="partner-logo">
+          </a>
+          {% else %}
+          <img src="{{ game.odds_partner.logo_url }}" alt="Sportsbook partner" class="partner-logo">
+          {% endif %}
+        {% elif game.odds_partner.site_url %}
+        <a href="{{ game.odds_partner.site_url }}" target="_blank" rel="noopener noreferrer">Sportsbook</a>
+        {% endif %}
       </div>
       {% endif %}
       {% if game.season_series is not none %}
@@ -145,6 +162,20 @@
           + '<div>' + game.home + ' ML: <span class="' + oddsClass(game.home_ml) + '">' + fmtOdds(game.home_ml) + '</span></div>'
           + '</div>';
       }
+      var partnerHtml = '';
+      if (game.odds_partner) {
+        var p = game.odds_partner;
+        if (p.logo_url) {
+          var imgTag = '<img src="' + p.logo_url + '" alt="Sportsbook partner" class="partner-logo">';
+          partnerHtml = '<div class="odds-partner">'
+            + (p.site_url
+              ? '<a href="' + p.site_url + '" target="_blank" rel="noopener noreferrer">' + imgTag + '</a>'
+              : imgTag)
+            + '</div>';
+        } else if (p.site_url) {
+          partnerHtml = '<div class="odds-partner"><a href="' + p.site_url + '" target="_blank" rel="noopener noreferrer">Sportsbook</a></div>';
+        }
+      }
       var seriesHtml = '';
       if (game.season_series !== null && game.season_series !== undefined) {
         var s = game.season_series;
@@ -170,7 +201,7 @@
         + '<div class="team"><div class="team-abbrev">' + game.away + '</div><div class="vs">AWAY</div></div>'
         + '<div><div class="score">' + game.away_score + ' – ' + game.home_score + '</div></div>'
         + '<div class="team"><div class="team-abbrev">' + game.home + '</div><div class="vs">HOME</div></div>'
-        + '</div>' + oddsHtml + seriesHtml + historyHtml + '</div>';
+        + '</div>' + oddsHtml + partnerHtml + seriesHtml + historyHtml + '</div>';
     }
 
     function refreshScores() {

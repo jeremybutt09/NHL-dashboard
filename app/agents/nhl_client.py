@@ -41,10 +41,14 @@ def get_todays_score_now() -> list:
 
     Returns the flat ``games`` list from the NHL score API, which includes
     per-team odds nested under ``awayTeam.odds`` and ``homeTeam.odds``.
+    The top-level ``oddsPartners`` list is injected into each game dict under
+    the key ``oddsPartners`` so that callers can match branding without a
+    second API call.
 
     Returns:
         list[dict]: Game objects for today. Each dict contains ``gameState``,
-            ``homeTeam``, ``awayTeam`` (with optional ``odds`` lists), etc.
+            ``homeTeam``, ``awayTeam`` (with optional ``odds`` lists), and
+            ``oddsPartners`` (list of partner metadata from the response root).
             Returns an empty list if no games key is present.
 
     Raises:
@@ -52,7 +56,60 @@ def get_todays_score_now() -> list:
     """
     response = requests.get(NHL_SCORE_URL)
     response.raise_for_status()
-    return response.json().get("games", [])
+    data = response.json()
+    odds_partners = data.get("oddsPartners", [])
+    games = data.get("games", [])
+    for game in games:
+        game["oddsPartners"] = odds_partners
+    return games
+
+
+def extract_odds_partner(odds_partners: list, provider_id: int | None) -> dict:
+    """Finds the sportsbook partner matching a provider ID.
+
+    Searches ``odds_partners`` for an entry whose ``partnerId`` equals
+    ``provider_id`` and returns a normalized dict with ``logo_url`` and
+    ``site_url`` keys.  Returns an empty dict when no match is found or when
+    ``provider_id`` is ``None``.
+
+    Args:
+        odds_partners: List of partner dicts from the NHL score/now response
+            ``oddsPartners`` field.  Each entry may contain ``partnerId``,
+            ``imageUrl``, and ``siteUrl``.
+        provider_id: The integer provider ID to match against ``partnerId``.
+
+    Returns:
+        dict: ``{"logo_url": str | None, "site_url": str | None}`` for the
+            matching partner, or ``{}`` when no match exists.
+    """
+    if provider_id is None or not odds_partners:
+        return {}
+    for partner in odds_partners:
+        if partner.get("partnerId") == provider_id:
+            return {
+                "logo_url": partner.get("imageUrl"),
+                "site_url": partner.get("siteUrl"),
+            }
+    return {}
+
+
+def _get_odds_provider_id(game: dict) -> int | None:
+    """Extracts the sportsbook provider ID from a game's team-level odds.
+
+    Checks ``awayTeam`` then ``homeTeam`` and returns the ``providerId`` from
+    the first non-empty odds list found.
+
+    Args:
+        game: Raw game dict from the NHL score/now API.
+
+    Returns:
+        int | None: Provider ID integer, or ``None`` when not present.
+    """
+    for team_key in ("awayTeam", "homeTeam"):
+        odds_list = game.get(team_key, {}).get("odds", [])
+        if odds_list:
+            return odds_list[0].get("providerId")
+    return None
 
 
 def extract_team_odds(team: dict) -> int | None:
@@ -247,6 +304,11 @@ def format_game(
     if away_ml is None and home_ml is None:
         away_ml, home_ml = _extract_moneyline(game)
 
+    partners = game.get("oddsPartners", [])
+    provider_id = _get_odds_provider_id(game)
+    partner = extract_odds_partner(partners, provider_id)
+    odds_partner = partner if partner else None
+
     return {
         "away": away.get("abbrev", ""),
         "home": home.get("abbrev", ""),
@@ -258,4 +320,5 @@ def format_game(
         "away_last5": away_history if away_history is not None else [],
         "home_last5": home_history if home_history is not None else [],
         "season_series": season_series,
+        "odds_partner": odds_partner,
     }
