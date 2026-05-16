@@ -115,10 +115,7 @@ def test_dashboard_returns_200(client):
     """GET /dashboard responds with HTTP 200."""
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-16",
-            "gamesByDate": [{"date": "2026-05-16", "games": MOCK_GAMES}],
-        }
+        mock_resp.json.return_value = {"games": MOCK_GAMES}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")
@@ -130,10 +127,7 @@ def test_dashboard_returns_html(client):
     """GET /dashboard returns an HTML response."""
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-16",
-            "gamesByDate": [{"date": "2026-05-16", "games": MOCK_GAMES}],
-        }
+        mock_resp.json.return_value = {"games": MOCK_GAMES}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")
@@ -145,10 +139,7 @@ def test_dashboard_shows_team_abbreviations(client):
     """GET /dashboard renders team abbreviations for each game."""
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-16",
-            "gamesByDate": [{"date": "2026-05-16", "games": MOCK_GAMES}],
-        }
+        mock_resp.json.return_value = {"games": MOCK_GAMES}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")
@@ -163,10 +154,7 @@ def test_dashboard_live_game_marked_as_live(client):
     """GET /dashboard marks live games with a 'live' indicator."""
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-16",
-            "gamesByDate": [{"date": "2026-05-16", "games": [LIVE_GAME]}],
-        }
+        mock_resp.json.return_value = {"games": [LIVE_GAME]}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")
@@ -178,10 +166,7 @@ def test_dashboard_shows_empty_state_when_no_games(client):
     """GET /dashboard shows a no-games message when the schedule is empty."""
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-16",
-            "gamesByDate": [],
-        }
+        mock_resp.json.return_value = {"games": []}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")

@@ -4,7 +4,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from app.agents.nhl_client import format_game, get_team_last_5, get_todays_games
+from app.agents.nhl_client import (
+    extract_team_odds,
+    format_game,
+    get_team_last_5,
+    get_todays_games,
+    get_todays_score_now,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures / shared test data
@@ -570,3 +576,153 @@ def test_format_game_season_series_defaults_to_none():
     """format_game sets season_series to None when not provided."""
     result = format_game(GAME_WITH_ODDS)
     assert result["season_series"] is None
+
+
+# ---------------------------------------------------------------------------
+# extract_team_odds (Issue #20)
+# ---------------------------------------------------------------------------
+
+TEAM_WITH_NEGATIVE_ODDS = {"abbrev": "MTL", "odds": [{"providerId": 1, "value": "-120"}]}
+TEAM_WITH_POSITIVE_ODDS = {"abbrev": "TOR", "odds": [{"providerId": 1, "value": "+105"}]}
+TEAM_WITHOUT_ODDS_FIELD = {"abbrev": "VGK"}
+TEAM_WITH_EMPTY_ODDS = {"abbrev": "EDM", "odds": []}
+TEAM_WITH_MISSING_VALUE = {"abbrev": "CAR", "odds": [{"providerId": 1}]}
+
+
+def test_extract_team_odds_returns_negative_int():
+    """extract_team_odds converts a negative string value to an integer."""
+    assert extract_team_odds(TEAM_WITH_NEGATIVE_ODDS) == -120
+
+
+def test_extract_team_odds_returns_positive_int():
+    """extract_team_odds converts a positive string value to an integer."""
+    assert extract_team_odds(TEAM_WITH_POSITIVE_ODDS) == 105
+
+
+def test_extract_team_odds_returns_none_when_odds_field_absent():
+    """extract_team_odds returns None when the team dict has no odds key."""
+    assert extract_team_odds(TEAM_WITHOUT_ODDS_FIELD) is None
+
+
+def test_extract_team_odds_returns_none_when_odds_list_empty():
+    """extract_team_odds returns None when the odds list is empty."""
+    assert extract_team_odds(TEAM_WITH_EMPTY_ODDS) is None
+
+
+def test_extract_team_odds_returns_none_when_value_key_missing():
+    """extract_team_odds returns None when the odds entry has no value key."""
+    assert extract_team_odds(TEAM_WITH_MISSING_VALUE) is None
+
+
+# ---------------------------------------------------------------------------
+# get_todays_score_now (Issue #20)
+# ---------------------------------------------------------------------------
+
+MOCK_SCORE_NOW = {
+    "currentDate": "2026-05-11",
+    "games": [
+        {
+            "id": 10,
+            "gameDate": "2026-05-11",
+            "gameState": "LIVE",
+            "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+            "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+        }
+    ],
+}
+
+
+def test_get_todays_score_now_returns_list():
+    """get_todays_score_now returns a list on a successful response."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW
+        mock_get.return_value = mock_resp
+
+        result = get_todays_score_now()
+
+        assert isinstance(result, list)
+
+
+def test_get_todays_score_now_returns_games():
+    """get_todays_score_now returns the top-level games list."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW
+        mock_get.return_value = mock_resp
+
+        result = get_todays_score_now()
+
+        assert len(result) == 1
+        assert result[0]["id"] == 10
+
+
+def test_get_todays_score_now_calls_correct_url():
+    """get_todays_score_now makes exactly one GET request to NHL_SCORE_URL."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = MOCK_SCORE_NOW
+        mock_get.return_value = mock_resp
+
+        get_todays_score_now()
+
+        mock_get.assert_called_once_with("https://api-web.nhle.com/v1/score/now")
+
+
+def test_get_todays_score_now_raises_on_http_error():
+    """get_todays_score_now propagates HTTPError when the API returns a non-2xx status."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(requests.HTTPError):
+            get_todays_score_now()
+
+
+def test_get_todays_score_now_returns_empty_when_no_games_key():
+    """get_todays_score_now returns an empty list when games key is absent."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"currentDate": "2026-05-11"}
+        mock_get.return_value = mock_resp
+
+        result = get_todays_score_now()
+
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# format_game with team-level odds (Issue #20)
+# ---------------------------------------------------------------------------
+
+GAME_WITH_TEAM_ODDS = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+}
+
+GAME_WITHOUT_TEAM_ODDS = {
+    "gameState": "PRE",
+    "homeTeam": {"abbrev": "VGK"},
+    "awayTeam": {"abbrev": "EDM"},
+}
+
+
+def test_format_game_reads_away_ml_from_awayteam_odds():
+    """format_game extracts away_ml from awayTeam.odds when present."""
+    result = format_game(GAME_WITH_TEAM_ODDS)
+    assert result["away_ml"] == -120
+
+
+def test_format_game_reads_home_ml_from_hometeam_odds():
+    """format_game extracts home_ml from homeTeam.odds when present."""
+    result = format_game(GAME_WITH_TEAM_ODDS)
+    assert result["home_ml"] == 105
+
+
+def test_format_game_team_odds_none_when_no_team_level_odds():
+    """format_game returns None odds when neither team has team-level odds."""
+    result = format_game(GAME_WITHOUT_TEAM_ODDS)
+    assert result["away_ml"] is None
+    assert result["home_ml"] is None

@@ -2,6 +2,7 @@
 import requests
 
 NHL_SCOREBOARD_URL = "https://api-web.nhle.com/v1/scoreboard/now"
+NHL_SCORE_URL = "https://api-web.nhle.com/v1/score/now"
 NHL_TEAM_SCHEDULE_URL = "https://api-web.nhle.com/v1/club-schedule-season/{}/now"
 
 _LIVE_STATES = {"LIVE", "CRIT"}
@@ -33,6 +34,51 @@ def get_todays_games() -> list:
             return entry.get("games", [])
 
     return []
+
+
+def get_todays_score_now() -> list:
+    """Fetches today's NHL games from the score/now endpoint.
+
+    Returns the flat ``games`` list from the NHL score API, which includes
+    per-team odds nested under ``awayTeam.odds`` and ``homeTeam.odds``.
+
+    Returns:
+        list[dict]: Game objects for today. Each dict contains ``gameState``,
+            ``homeTeam``, ``awayTeam`` (with optional ``odds`` lists), etc.
+            Returns an empty list if no games key is present.
+
+    Raises:
+        requests.HTTPError: If the API responds with a non-2xx HTTP status.
+    """
+    response = requests.get(NHL_SCORE_URL)
+    response.raise_for_status()
+    return response.json().get("games", [])
+
+
+def extract_team_odds(team: dict) -> int | None:
+    """Extracts a money line odds integer from a team dict's odds list.
+
+    Reads ``team["odds"][0]["value"]`` and converts the string (e.g. ``"-120"``
+    or ``"+105"``) to an integer.  Returns ``None`` when the odds field is
+    absent, empty, or the value key is missing.
+
+    Args:
+        team: Team dict from the NHL score/now API, e.g. ``awayTeam`` or
+            ``homeTeam``, which may contain an ``odds`` list.
+
+    Returns:
+        int | None: Integer money line value, or ``None`` when unavailable.
+    """
+    odds_list = team.get("odds", [])
+    if not odds_list:
+        return None
+    value = odds_list[0].get("value")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
 
 
 def get_team_last_5(team_abbrev: str) -> list:
@@ -195,7 +241,11 @@ def format_game(
 
     home = game.get("homeTeam", {})
     away = game.get("awayTeam", {})
-    away_ml, home_ml = _extract_moneyline(game)
+
+    away_ml = extract_team_odds(away)
+    home_ml = extract_team_odds(home)
+    if away_ml is None and home_ml is None:
+        away_ml, home_ml = _extract_moneyline(game)
 
     return {
         "away": away.get("abbrev", ""),

@@ -132,10 +132,7 @@ def test_api_scores_endpoint_returns_formatted_games(client):
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         from unittest.mock import MagicMock
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-11",
-            "gamesByDate": [{"date": "2026-05-11", "games": MOCK_GAMES}],
-        }
+        mock_resp.json.return_value = {"games": MOCK_GAMES}
         mock_get.return_value = mock_resp
 
         response = client.get("/api/scores")
@@ -233,10 +230,7 @@ def test_dashboard_displays_odds_when_available(client):
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         from unittest.mock import MagicMock
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-11",
-            "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_WITH_ODDS]}],
-        }
+        mock_resp.json.return_value = {"games": [MOCK_GAME_WITH_ODDS]}
         mock_get.return_value = mock_resp
 
         response = client.get("/dashboard")
@@ -267,10 +261,7 @@ def test_api_scores_includes_odds_fields(client):
     with patch("app.agents.nhl_client.requests.get") as mock_get:
         from unittest.mock import MagicMock
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "focusedDate": "2026-05-11",
-            "gamesByDate": [{"date": "2026-05-11", "games": [MOCK_GAME_WITH_ODDS]}],
-        }
+        mock_resp.json.return_value = {"games": [MOCK_GAME_WITH_ODDS]}
         mock_get.return_value = mock_resp
 
         response = client.get("/api/scores")
@@ -552,3 +543,71 @@ def test_dashboard_refresh_js_displays_error_on_failure(client):
 
         assert "error-banner" in html
         assert ".catch(" in html
+
+
+# ---------------------------------------------------------------------------
+# Team-level odds from score/now endpoint (Issue #20)
+# ---------------------------------------------------------------------------
+
+MOCK_SCORE_NOW_GAME = {
+    "id": 20,
+    "gameDate": "2026-05-11",
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+}
+
+
+def test_dashboard_displays_team_odds_from_score_now(client):
+    """GET /dashboard renders money line odds parsed from awayTeam.odds and homeTeam.odds."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": [MOCK_SCORE_NOW_GAME]}
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "-120" in html
+        assert "105" in html
+
+
+def test_api_scores_includes_team_level_odds(client):
+    """GET /api/scores returns away_ml and home_ml parsed from team-level odds."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"games": [MOCK_SCORE_NOW_GAME]}
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert data[0]["away_ml"] == -120
+        assert data[0]["home_ml"] == 105
+
+
+def test_dashboard_renders_without_error_when_team_odds_absent(client):
+    """GET /dashboard renders with HTTP 200 when game has no team-level odds."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "games": [
+                {
+                    "id": 21,
+                    "gameDate": "2026-05-11",
+                    "gameState": "PRE",
+                    "homeTeam": {"abbrev": "VGK"},
+                    "awayTeam": {"abbrev": "EDM"},
+                }
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200

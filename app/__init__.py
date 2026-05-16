@@ -7,6 +7,7 @@ from app.agents.nhl_client import (
     get_season_series,
     get_team_last_5,
     get_todays_games,
+    get_todays_score_now,
 )
 
 
@@ -85,15 +86,18 @@ def create_app(test_config: dict | None = None) -> Flask:
     def api_scores():
         """Return today's formatted NHL game scores as JSON for auto-refresh polling.
 
+        Fetches from the NHL score/now endpoint, which provides per-team odds
+        in awayTeam.odds and homeTeam.odds.
+
         Returns:
             Response: JSON array of formatted game dicts (keys: away, home,
-                away_score, home_score, status, away_last5, home_last5).
-                Returns an empty list with HTTP 200 when the upstream NHL API
-                is unavailable, so the polling client does not break on
-                transient failures.
+                away_score, home_score, status, away_ml, home_ml, away_last5,
+                home_last5, season_series). Returns an empty list with HTTP 200
+                when the upstream NHL API is unavailable, so the polling client
+                does not break on transient failures.
         """
         try:
-            raw_games = get_todays_games()
+            raw_games = get_todays_score_now()
             return jsonify([_format_game_with_history(g) for g in raw_games])
         except requests.RequestException:
             return jsonify([])
@@ -102,6 +106,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     def dashboard():
         """Render today's NHL scoreboard as an HTML dashboard.
 
+        Fetches from the NHL score/now endpoint so that per-team odds from
+        awayTeam.odds and homeTeam.odds are included on each game card.
+
         Returns:
             Response: Rendered HTML page showing all of today's games grouped
                 by status (live, final, upcoming). Falls back to an empty-state
@@ -109,7 +116,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         """
         api_error = False
         try:
-            raw_games = get_todays_games()
+            raw_games = get_todays_score_now()
         except requests.RequestException:
             raw_games = []
             api_error = True
