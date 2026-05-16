@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NHL Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #58a6ff; }
+    .games { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .game { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.25rem; }
+    .game.live { border-color: #3fb950; }
+    .game.final { border-color: #8b949e; }
+    .game.upcoming { border-color: #58a6ff; }
+    .status-badge {
+      display: inline-block; font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0.15rem 0.5rem; border-radius: 4px; margin-bottom: 0.75rem;
+    }
+    .live .status-badge { background: #3fb950; color: #0d1117; }
+    .final .status-badge { background: #8b949e; color: #0d1117; }
+    .upcoming .status-badge { background: #58a6ff; color: #0d1117; }
+    .matchup { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .team { text-align: center; flex: 1; }
+    .team-abbrev { font-size: 1.4rem; font-weight: 700; }
+    .score { font-size: 1.8rem; font-weight: 800; min-width: 2ch; text-align: center; }
+    .vs { font-size: 0.8rem; color: #8b949e; }
+    .live .score { color: #3fb950; }
+    .empty { text-align: center; color: #8b949e; padding: 3rem 0; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>NHL Scoreboard</h1>
+
+  {% if games %}
+  <div class="games">
+    {% for game in games %}
+    <div class="game {{ game.status }}">
+      <span class="status-badge">
+        {% if game.status == "live" %}Live
+        {% elif game.status == "final" %}Final
+        {% else %}Upcoming{% endif %}
+      </span>
+      <div class="matchup">
+        <div class="team">
+          <div class="team-abbrev">{{ game.away }}</div>
+          <div class="vs">AWAY</div>
+        </div>
+        <div>
+          <div class="score">{{ game.away_score }} – {{ game.home_score }}</div>
+        </div>
+        <div class="team">
+          <div class="team-abbrev">{{ game.home }}</div>
+          <div class="vs">HOME</div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No games scheduled for today.</p>
+  {% endif %}
+</body>
+</html>
