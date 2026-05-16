@@ -11,6 +11,9 @@ Project rules:
 - Add Google-style docstrings to new functions.
 - Keep changes focused and avoid unrelated refactors.
 - Use the official NHL API for scores, history, and odds unless `harness/SPEC.md` says otherwise.
+- When drafting issues, cross-reference existing GitHub labels before using them. Only add new labels when they are truly needed, and give each new label a clear description and strategic purpose.
+- For NHL data work, do not assume an endpoint when the source is unclear. Ask which NHL API endpoint should be used or suggest a short list of likely options, then document the choice in the issue body.
+- Prefer splitting larger product work into a small epic plus focused child stories when that improves AI execution.
 
 Testing rules:
 - Every new function needs matching test coverage.
