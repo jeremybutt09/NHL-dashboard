@@ -868,3 +868,64 @@ def test_format_game_odds_partner_is_none_when_provider_id_not_matched():
     """format_game sets odds_partner to None when no partner matches the provider_id."""
     result = format_game(GAME_WITH_NO_PARTNER_MATCH)
     assert result["odds_partner"] is None
+
+
+# ---------------------------------------------------------------------------
+# Graceful handling of missing partner metadata (Issue #22)
+# ---------------------------------------------------------------------------
+
+_GAME_WITH_ODDS_PARTNER_NO_BRANDING = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+    "oddsPartners": [{"partnerId": 1}],  # matched partner, but no imageUrl or siteUrl
+}
+
+_GAME_WITH_ODDS_EMPTY_PARTNERS = {
+    "gameState": "LIVE",
+    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+    "oddsPartners": [],
+}
+
+
+def test_extract_odds_partner_handles_both_urls_missing():
+    """extract_odds_partner returns both None values when partner has no imageUrl or siteUrl."""
+    partners = [{"partnerId": 1}]
+    result = extract_odds_partner(partners, 1)
+    assert result == {"logo_url": None, "site_url": None}
+
+
+def test_format_game_odds_partner_is_none_when_matched_partner_has_no_branding():
+    """format_game returns odds_partner=None when the matched partner has neither logo nor site URL."""
+    result = format_game(_GAME_WITH_ODDS_PARTNER_NO_BRANDING)
+    assert result["odds_partner"] is None
+
+
+def test_format_game_shows_odds_when_partner_has_no_branding():
+    """format_game returns valid away_ml and home_ml even when matched partner has no branding."""
+    result = format_game(_GAME_WITH_ODDS_PARTNER_NO_BRANDING)
+    assert result["away_ml"] == -120
+    assert result["home_ml"] == 105
+
+
+def test_format_game_shows_odds_when_odds_partners_empty():
+    """format_game returns valid odds and odds_partner=None when oddsPartners list is empty."""
+    result = format_game(_GAME_WITH_ODDS_EMPTY_PARTNERS)
+    assert result["away_ml"] == -120
+    assert result["home_ml"] == 105
+    assert result["odds_partner"] is None
+
+
+def test_format_game_handles_game_with_no_odds_and_no_partners():
+    """format_game sets all odds fields to None when game has neither odds nor partner data."""
+    game = {
+        "gameState": "PRE",
+        "homeTeam": {"abbrev": "VGK"},
+        "awayTeam": {"abbrev": "EDM"},
+        "oddsPartners": [],
+    }
+    result = format_game(game)
+    assert result["away_ml"] is None
+    assert result["home_ml"] is None
+    assert result["odds_partner"] is None

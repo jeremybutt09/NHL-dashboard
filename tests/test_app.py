@@ -753,3 +753,95 @@ def test_api_scores_includes_odds_partner_field(client):
         assert "odds_partner" in data[0]
         assert data[0]["odds_partner"]["logo_url"] == "http://logo.example.com/partner.png"
         assert data[0]["odds_partner"]["site_url"] == "http://bet.example.com"
+
+
+# ---------------------------------------------------------------------------
+# Graceful handling of missing partner metadata (Issue #22)
+# ---------------------------------------------------------------------------
+
+_NO_BRANDING_RESPONSE = {
+    "oddsPartners": [{"partnerId": 1}],  # matched partner, no imageUrl or siteUrl
+    "games": [
+        {
+            "id": 25,
+            "gameDate": "2026-05-11",
+            "gameState": "LIVE",
+            "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+            "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+        }
+    ],
+}
+
+
+def test_dashboard_renders_gracefully_when_partner_has_no_branding(client):
+    """GET /dashboard returns HTTP 200 when oddsPartners entry has no imageUrl or siteUrl."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = _NO_BRANDING_RESPONSE
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200
+
+
+def test_dashboard_shows_odds_when_partner_has_no_branding(client):
+    """GET /dashboard renders money line odds even when partner has no logo or siteUrl."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = _NO_BRANDING_RESPONSE
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+        html = response.data.decode("utf-8")
+
+        assert "-120" in html
+        assert "105" in html
+
+
+def test_dashboard_renders_mixed_games_with_and_without_odds(client):
+    """GET /dashboard handles a mix of games with full, partial, and absent odds data."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "oddsPartners": [
+                {"partnerId": 1, "imageUrl": "http://logo.example.com/partner.png", "siteUrl": "http://bet.example.com"},
+            ],
+            "games": [
+                {
+                    "id": 26,
+                    "gameState": "LIVE",
+                    "homeTeam": {"abbrev": "TOR", "score": 2, "odds": [{"providerId": 1, "value": "+105"}]},
+                    "awayTeam": {"abbrev": "MTL", "score": 1, "odds": [{"providerId": 1, "value": "-120"}]},
+                },
+                {
+                    "id": 27,
+                    "gameState": "PRE",
+                    "homeTeam": {"abbrev": "VGK"},
+                    "awayTeam": {"abbrev": "EDM"},
+                },
+            ],
+        }
+        mock_get.return_value = mock_resp
+
+        response = client.get("/dashboard")
+
+        assert response.status_code == 200
+
+
+def test_api_scores_returns_odds_partner_none_when_partner_has_no_branding(client):
+    """GET /api/scores returns odds_partner=None when matched partner has no logo or siteUrl."""
+    with patch("app.agents.nhl_client.requests.get") as mock_get:
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = _NO_BRANDING_RESPONSE
+        mock_get.return_value = mock_resp
+
+        response = client.get("/api/scores")
+        data = response.get_json()
+
+        assert len(data) == 1
+        assert data[0]["odds_partner"] is None

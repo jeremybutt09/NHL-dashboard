@@ -307,7 +307,7 @@ def format_game(
     partners = game.get("oddsPartners", [])
     provider_id = _get_odds_provider_id(game)
     partner = extract_odds_partner(partners, provider_id)
-    odds_partner = partner if partner else None
+    odds_partner = partner if (partner.get("logo_url") or partner.get("site_url")) else None
 
     return {
         "away": away.get("abbrev", ""),
