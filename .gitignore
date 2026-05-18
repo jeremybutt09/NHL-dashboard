@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code issue-processing state
+.claude-issues-progress
+logs/issues/
+RESUME-GUIDE.md
