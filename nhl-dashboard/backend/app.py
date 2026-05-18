@@ -28,4 +28,7 @@ def create_app(config=None):
         import models  # noqa: F401 — registers models with SQLAlchemy metadata
         db.create_all()
 
+    import scheduler
+    scheduler.init_scheduler(app)
+
     return app
