@@ -33,10 +33,14 @@ function SunIcon() {
   );
 }
 
+const DENSITIES = ['Compact', 'Regular', 'Comfy'];
+
 /**
- * App topbar: Peak logo and dark mode toggle.
+ * App topbar: Peak logo, density toggle, and dark mode toggle.
+ *
+ * @param {{ density: string, onDensityChange: (d: string) => void }} props
  */
-export default function Topbar() {
+export default function Topbar({ density = 'regular', onDensityChange }) {
   const [dark, setDark] = useState(() => {
     try { return localStorage.getItem('theme') === 'dark'; } catch { return false; }
   });
@@ -59,13 +63,49 @@ export default function Topbar() {
       zIndex: 10,
     }}>
       <PeakMark />
-      <button
-        className="icon-btn"
-        aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-        onClick={() => setDark(d => !d)}
-      >
-        {dark ? <SunIcon /> : <MoonIcon />}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Density toggle */}
+        <div style={{ display: 'flex', gap: 2 }}>
+          {DENSITIES.map((label) => {
+            const value = label.toLowerCase();
+            const active = density === value;
+            return (
+              <button
+                key={value}
+                aria-label={label}
+                aria-pressed={active}
+                onClick={() => onDensityChange?.(value)}
+                style={{
+                  background: active ? 'var(--accent-soft)' : 'transparent',
+                  border: '1px solid',
+                  borderColor: active
+                    ? 'color-mix(in oklab, var(--accent) 40%, transparent)'
+                    : 'var(--rule)',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 500,
+                  color: active ? 'var(--accent-deep)' : 'var(--muted)',
+                  cursor: 'pointer',
+                  letterSpacing: '0.01em',
+                  transition: 'all .12s ease',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Dark mode toggle */}
+        <button
+          className="icon-btn"
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={() => setDark(d => !d)}
+        >
+          {dark ? <SunIcon /> : <MoonIcon />}
+        </button>
+      </div>
     </header>
   );
 }

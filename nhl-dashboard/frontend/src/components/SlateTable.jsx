@@ -10,14 +10,32 @@ const HEADER_STYLE = {
 
 const GRID_COLS = '120px minmax(280px, 1.1fr) minmax(360px, 1.4fr) 160px 110px 110px';
 
+function SkeletonRow() {
+  return (
+    <div
+      className="game-row bar-shimmer"
+      aria-hidden="true"
+      style={{ position: 'relative', overflow: 'hidden' }}
+    >
+      {[...Array(6)].map((_, i) => (
+        <div
+          key={i}
+          style={{ height: 20, borderRadius: 4, background: 'var(--rule)' }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * Renders the full slate table: column header row + one GameRow per game.
+ * Shows skeleton rows while loading, and an empty state when no games exist.
  *
- * @param {{ games: Array, loading: boolean, error: Error|null }} props
+ * @param {{ games: Array, loading: boolean, error: Error|null, density?: string }} props
  */
-export default function SlateTable({ games, loading, error }) {
+export default function SlateTable({ games, loading, error, density = 'regular' }) {
   return (
-    <div>
+    <div className={`density-${density}`}>
       {/* Column header */}
       <div style={{
         display: 'grid',
@@ -38,8 +56,29 @@ export default function SlateTable({ games, loading, error }) {
         <div style={{ ...HEADER_STYLE, textAlign: 'right' }}>Details</div>
       </div>
 
+      {/* Loading skeletons */}
+      {loading && (
+        <>
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </>
+      )}
+
+      {/* Empty state */}
+      {!loading && (!games || games.length === 0) && (
+        <div style={{
+          padding: '48px 24px',
+          textAlign: 'center',
+          color: 'var(--faint)',
+          fontSize: 15,
+        }}>
+          No games scheduled today.
+        </div>
+      )}
+
       {/* Game rows */}
-      {games && games.map((g) => (
+      {!loading && games && games.map((g) => (
         <GameRow key={g.id} g={g} />
       ))}
     </div>
