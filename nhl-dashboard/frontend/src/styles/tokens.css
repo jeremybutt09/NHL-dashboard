@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --paper: #ffffff;
+  --bg:    #f4f6f9;
+  --ink:   #0c1726;
+  --muted: #5a6878;
+  --faint: #94a1b2;
+  --rule:  #e3e8ee;
+  --rule-strong: #cdd5df;
+  --accent: #1ba1b8;
+  --accent-deep: #0a7a8e;
+  --accent-soft: #e3f4f7;
+  --hot: #e63946;
+  --hot-soft: #fde8ea;
+  --up: #1a8b5f;
+  --up-soft: #e1f3eb;
+  --down: #c8362d;
+  --warn: #c98a14;
+  --shadow: 0 1px 0 rgba(12,23,38,0.04), 0 1px 2px rgba(12,23,38,0.04);
+  --shadow-lg: 0 6px 20px -8px rgba(12,23,38,0.12), 0 2px 4px rgba(12,23,38,0.04);
+}
+
+.dark {
+  --paper: #131922;
+  --bg:    #0c1119;
+  --ink:   #e8edf3;
+  --muted: #94a3b3;
+  --faint: #5a6878;
+  --rule:  #1f2733;
+  --rule-strong: #2c3644;
+  --accent: #4dc6db;
+  --accent-deep: #2bb0c8;
+  --accent-soft: #0e2c33;
+  --hot: #ff5d6c;
+  --hot-soft: #2e1418;
+  --up: #2dc585;
+  --up-soft: #0e2a1f;
+  --down: #ff6a6a;
+  --warn: #e5b260;
+  --shadow: 0 1px 0 rgba(0,0,0,0.3);
+  --shadow-lg: 0 6px 20px -8px rgba(0,0,0,0.5);
+}
