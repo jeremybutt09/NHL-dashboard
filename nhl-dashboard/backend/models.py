@@ -24,6 +24,20 @@ class Game(db.Model):
     home_score = db.Column(db.Integer, default=0)
     away_sog = db.Column(db.Integer, default=0)
     home_sog = db.Column(db.Integer, default=0)
+    # Season record
+    away_wins = db.Column(db.Integer, default=0)
+    away_losses = db.Column(db.Integer, default=0)
+    away_otl = db.Column(db.Integer, default=0)
+    home_wins = db.Column(db.Integer, default=0)
+    home_losses = db.Column(db.Integer, default=0)
+    home_otl = db.Column(db.Integer, default=0)
+    # Last-10 record
+    away_l10_w = db.Column(db.Integer, default=0)
+    away_l10_l = db.Column(db.Integer, default=0)
+    away_l10_otl = db.Column(db.Integer, default=0)
+    home_l10_w = db.Column(db.Integer, default=0)
+    home_l10_l = db.Column(db.Integer, default=0)
+    home_l10_otl = db.Column(db.Integer, default=0)
     updated_at = db.Column(db.DateTime)
 
 
@@ -36,6 +50,8 @@ class OddsSnapshot(db.Model):
     book = db.Column(db.String(32))  # 'consensus' for v1
     away_ml = db.Column(db.Integer)  # American odds, e.g. +120
     home_ml = db.Column(db.Integer)
+    away_ml_open = db.Column(db.Integer, nullable=True)
+    home_ml_open = db.Column(db.Integer, nullable=True)
     away_implied = db.Column(db.Float)  # 0-100
     home_implied = db.Column(db.Float)
 

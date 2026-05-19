@@ -22,7 +22,9 @@ def create_app(config=None):
     db.init_app(app)
 
     from routes.health import health_bp
+    from routes.games import games_bp
     app.register_blueprint(health_bp)
+    app.register_blueprint(games_bp)
 
     with app.app_context():
         import models  # noqa: F401 — registers models with SQLAlchemy metadata
