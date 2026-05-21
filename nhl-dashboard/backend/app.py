@@ -3,6 +3,8 @@
 from flask import Flask
 
 from config import Config
+from extensions import db
+import models  # noqa: F401 — registers models with SQLAlchemy
 from routes.health import health_bp
 from routes.games import games_bp
 from routes.game_detail import game_detail_bp
@@ -22,6 +24,12 @@ def create_app(test_config=None):
 
     if test_config is not None:
         app.config.update(test_config)
+
+    db.init_app(app)
+
+    if not app.config.get("TESTING"):
+        with app.app_context():
+            db.create_all()
 
     app.register_blueprint(health_bp)
     app.register_blueprint(games_bp)
