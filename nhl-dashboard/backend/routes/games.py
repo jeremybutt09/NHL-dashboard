@@ -25,7 +25,7 @@ def _build_game_row(game: Game) -> dict:
     odds = get_odds(game.id)
 
     live = None
-    if game.status == "live":
+    if game.status in ("live", "final"):
         live = {
             "period": game.period,
             "clock": game.clock,

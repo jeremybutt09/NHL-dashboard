@@ -28,19 +28,19 @@ function Row({ code, name, rec, l10, score, leading, dim, showScores, density })
 }
 
 export default function MatchupCell({ g, state, density }) {
-  const isCompleted = !!(g.final && g.final.completed);
-  const isLive = (state === 'live' && !!g.live) || (g.final && g.final.a != null);
-  const scoreA = g.final ? g.final.a : g.live?.as;
-  const scoreH = g.final ? g.final.h : g.live?.hs;
-  const showScores = isLive || isCompleted;
+  const isFinal = g.status === "final";
+  const isLive = state === "live" && !!g.live;
+  const scoreA = g.live?.away_score;
+  const scoreH = g.live?.home_score;
+  const showScores = isLive || isFinal;
   const winA = showScores && scoreA != null && scoreH != null && scoreA > scoreH;
   const winH = showScores && scoreA != null && scoreH != null && scoreH > scoreA;
   return (
     <div className="matchup-cell" style={{ gap: density === 'compact' ? 6 : 10 }}>
-      <Row code={g.away} name={g.awayName} rec={g.awayRec} l10={g.awayL10}
+      <Row code={g.away.code} name={g.away.name} rec={g.away.record} l10={g.away.l10}
            score={scoreA} leading={winA} dim={showScores && winH}
            showScores={showScores} density={density} />
-      <Row code={g.home} name={g.homeName} rec={g.homeRec} l10={g.homeL10}
+      <Row code={g.home.code} name={g.home.name} rec={g.home.record} l10={g.home.l10}
            score={scoreH} leading={winH} dim={showScores && winA}
            showScores={showScores} density={density} />
     </div>

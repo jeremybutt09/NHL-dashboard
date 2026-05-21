@@ -1,23 +1,13 @@
 import LiveDot from './LiveDot';
 
 export default function StatusCell({ g, state }) {
-  if (g.final && g.final.completed) {
+  if (g.status === "final") {
     return (
       <div className="status-cell">
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontWeight: 600, fontSize: 12, letterSpacing: '0.06em' }}>
           FINAL
         </span>
         <span className="mono" style={{ fontSize: 12, color: 'var(--faint)' }}>{g.start}</span>
-      </div>
-    );
-  }
-  if (g.final && !g.final.completed && g.final.a != null) {
-    return (
-      <div className="status-cell">
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--hot)', fontWeight: 600, fontSize: 12, letterSpacing: '0.04em' }}>
-          <LiveDot /> LIVE
-        </span>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--faint)' }}>in progress</span>
       </div>
     );
   }

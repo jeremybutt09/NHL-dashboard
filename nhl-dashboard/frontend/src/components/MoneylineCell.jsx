@@ -5,22 +5,10 @@ function mlToProb(ml) {
   return n < 0 ? (-n) / ((-n) + 100) : 100 / (n + 100);
 }
 
-function oddsForBook(g, bookId) {
-  if (g.__source === 'api') {
-    const map = g.booksMap || {};
-    const b = map[bookId] || Object.values(map).find((x) => x.a) || Object.values(map)[0];
-    if (!b || !b.a) {
-      return { ml: { a: '—', h: '—' }, mlOpen: { a: '—', h: '—' }, ip: { a: 50, h: 50 }, blank: true };
-    }
-    const ml = { a: b.a, h: b.h };
-    const mlOpen = { a: b.a, h: b.h };
-    const pa = mlToProb(ml.a), ph = mlToProb(ml.h);
-    const sum = pa + ph;
-    return { ml, mlOpen, ip: { a: (pa / sum) * 100, h: (ph / sum) * 100 } };
-  }
-  const ml = g.ml || { a: '—', h: '—' };
-  const mlOpen = g.mlOpen || ml;
-  const pa = mlToProb(ml.a), ph = mlToProb(ml.h);
+function oddsForGame(g) {
+  const ml = g.ml || { away: '—', home: '—' };
+  const mlOpen = g.ml_open || ml;
+  const pa = mlToProb(ml.away), ph = mlToProb(ml.home);
   const sum = pa + ph || 1;
   return { ml, mlOpen, ip: { a: (pa / sum) * 100, h: (ph / sum) * 100 } };
 }
@@ -30,17 +18,14 @@ function pickForCalc(detail) {
 }
 
 export default function MoneylineCell({ g, state, book }) {
-  if (g.__source === 'api' && !g.booksMap) {
+  if (!g.ml || g.ml.away == null) {
     return <div style={{ color: 'var(--faint)', fontSize: 12, fontStyle: 'italic' }}>No odds available</div>;
   }
   const isLive = state === 'live' && !!g.live;
-  const adj = oddsForBook(g, book);
-  if (adj.blank) {
-    return <div style={{ color: 'var(--faint)', fontSize: 12, fontStyle: 'italic' }}>No moneyline offered</div>;
-  }
+  const adj = oddsForGame(g);
   const numeric = (s) => parseInt(String(s).replace(/[+]/, ''), 10) || 0;
-  const dA = numeric(adj.ml.a) - numeric(adj.mlOpen.a);
-  const dH = numeric(adj.ml.h) - numeric(adj.mlOpen.h);
+  const dA = numeric(adj.ml.away) - numeric(adj.mlOpen.away);
+  const dH = numeric(adj.ml.home) - numeric(adj.mlOpen.home);
   const arrow = (d) => d === 0 ? null : (
     <span style={{ fontSize: 10, color: d > 0 ? 'var(--up)' : 'var(--down)', fontWeight: 600, marginLeft: 4 }} className="mono">
       {d > 0 ? '▲' : '▼'}{Math.abs(d)}
@@ -64,20 +49,18 @@ export default function MoneylineCell({ g, state, book }) {
         {price}
       </span>
       <span style={{ fontSize: 10, color: 'var(--faint)', letterSpacing: '0.03em' }}>
-        {g.__source === 'api'
-          ? <span className="mono">current</span>
-          : <>from <span className="mono">{ip}</span>{arrow(delta)}</>}
+        from <span className="mono">{ip}</span>{arrow(delta)}
       </span>
     </button>
   );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Price price={adj.ml.a} delta={dA} ip={adj.mlOpen.a} side="flex-start" sideId="a" />
+        <Price price={adj.ml.away} delta={dA} ip={adj.mlOpen.away} side="flex-start" sideId="a" />
         <div style={{ flex: 1 }}>
-          <ImpliedBar ipA={adj.ip.a} ipH={adj.ip.h} awayCode={g.away} homeCode={g.home} live={isLive} />
+          <ImpliedBar ipA={adj.ip.a} ipH={adj.ip.h} awayCode={g.away.code} homeCode={g.home.code} live={isLive} />
         </div>
-        <Price price={adj.ml.h} delta={dH} ip={adj.mlOpen.h} side="flex-end" sideId="h" />
+        <Price price={adj.ml.home} delta={dH} ip={adj.mlOpen.home} side="flex-end" sideId="h" />
       </div>
     </div>
   );
