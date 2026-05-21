@@ -43,3 +43,7 @@ To start from a specific issue number (e.g., after a failure at #7):
 ```
 
 Each run opens a fresh Claude session per issue, commits, and closes the issue on GitHub before moving on. See `scripts/issue-prompt.md` for the per-session instructions Claude receives.
+
+## AI session state
+
+The `memory/` directory is intentionally gitignored. It contains auto-generated context files written by Claude during agent runs and is not source code. Do not commit or force-track files under `memory/`.
