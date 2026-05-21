@@ -24,6 +24,10 @@ Flask-based NHL scores and betting odds dashboard. Python 3.x, pytest, official 
 Closes #N
 ```
 
+## Interactive session permissions
+
+`.claude/settings.json` pre-approves common low-risk tools (file reads/writes, pytest, safe git commands) so developers are not interrupted by repetitive permission prompts during normal work. Destructive operations (`rm -rf`, force-push, hard reset) are explicitly denied. Do not add blanket `Bash` approval to this file.
+
 ## Automated issue processing
 
 To run all open GitHub issues sequentially through Claude Code (headless):
