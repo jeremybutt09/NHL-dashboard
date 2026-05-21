@@ -31,6 +31,10 @@ def create_app(test_config=None):
         with app.app_context():
             db.create_all()
 
+        from scheduler import _scheduler, init_scheduler
+        init_scheduler(app)
+        _scheduler.start()
+
     app.register_blueprint(health_bp)
     app.register_blueprint(games_bp)
     app.register_blueprint(game_detail_bp)

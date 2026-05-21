@@ -12,4 +12,10 @@ def health():
     Returns:
         JSON with ok, db, and last_poll fields.
     """
-    return jsonify({"ok": True, "db": "connected", "last_poll": None})
+    from scheduler import get_last_poll
+    last_poll = get_last_poll()
+    return jsonify({
+        "ok": True,
+        "db": "connected",
+        "last_poll": last_poll.isoformat() if last_poll else None,
+    })
