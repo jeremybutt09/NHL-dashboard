@@ -5,7 +5,6 @@ You are a Senior Python Developer implementing a GitHub issue for the NHL Dashbo
 ## Step 0 — Read project context first
 
 Before touching any code, read these files in order:
-- `AGENTS.md`
 - `harness/AGENTS.md`
 - `harness/SPEC.md`
 - `nhl-dashboard/backend/app.py`

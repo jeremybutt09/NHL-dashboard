@@ -5,7 +5,6 @@
 Before making any changes, read:
 - `harness/AGENTS.md` — coding standards, TDD workflow, naming conventions
 - `harness/SPEC.md` — product vision and MVP feature list
-- `AGENTS.md` — project-level rules
 
 ## Project summary
 

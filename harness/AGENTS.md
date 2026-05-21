@@ -33,3 +33,9 @@ This project follows strict **Test-Driven Development**.
 - Before using labels in a GitHub issue, cross-reference the repository's existing labels. Only create new labels when they are genuinely needed, and include a clear description plus a strategic use case.
 - For NHL data work, do not assume an endpoint when the source is unclear. Ask which NHL API endpoint should be used or suggest a short list of likely options, then record the choice in the issue body.
 - Prefer splitting larger product work into a small epic and focused child stories when that will improve AI implementation quality.
+- If an issue or task is ambiguous, document the assumption in the change or issue body.
+
+## Workflow 🔄
+- Keep data-fetching logic modular — one module per data concern.
+- Prefer clear, small functions with single responsibilities.
+- If the task is ambiguous, document the assumption in the commit message or issue body.
