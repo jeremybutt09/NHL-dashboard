@@ -8,10 +8,10 @@ Before touching any code, read these files in order:
 - `AGENTS.md`
 - `harness/AGENTS.md`
 - `harness/SPEC.md`
-- `app/__init__.py`
-- `app/agents/nhl_client.py`
+- `nhl-dashboard/backend/app.py`
+- `nhl-dashboard/backend/nhl_client.py`
 - `tests/test_nhl_client.py`
-- `tests/test_app.py`
+- `tests/test_scaffold.py`
 
 ## Step 1 — TDD: Write failing tests (Red)
 
