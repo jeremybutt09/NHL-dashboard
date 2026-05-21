@@ -227,3 +227,20 @@ button.icon-btn:hover {
   gap: 24px;
   align-items: center;
 }
+
+/* ── Density overrides ───────────────────────────────────────────────────── */
+
+[data-density="compact"] .game-row {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+[data-density="regular"] .game-row {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+[data-density="comfy"] .game-row {
+  padding-top: 22px;
+  padding-bottom: 22px;
+}
