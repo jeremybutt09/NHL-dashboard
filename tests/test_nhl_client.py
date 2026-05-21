@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "nhl-dashboard", "backend"))
 
-from nhl_client import NhlClient  # noqa: E402
+from nhl_client import NhlClient, BASE_URL  # noqa: E402
 
 SCHEDULE_FIXTURE = {
     "gameWeek": [
@@ -107,3 +107,29 @@ def test_http_error_returns_none():
         result = client.get_schedule_today()
 
     assert result is None
+
+
+def test_get_schedule_today_follows_redirects():
+    """Assert httpx.get is called with follow_redirects=True for schedule."""
+    client = NhlClient(slate_ttl=60, live_ttl=15)
+    with patch("httpx.get", return_value=_ok_response(SCHEDULE_FIXTURE)) as mock_get:
+        with patch.object(client, "_today", return_value="2026-05-20"):
+            games = client.get_schedule_today()
+
+    mock_get.assert_called_once_with(
+        f"{BASE_URL}/schedule/now", follow_redirects=True
+    )
+    assert games is not None
+    assert len(games) == 1
+
+
+def test_get_boxscore_follows_redirects():
+    """Assert httpx.get is called with follow_redirects=True for boxscore."""
+    client = NhlClient(slate_ttl=60, live_ttl=15)
+    with patch("httpx.get", return_value=_ok_response(BOXSCORE_FIXTURE)) as mock_get:
+        boxscore = client.get_boxscore(2026020812)
+
+    mock_get.assert_called_once_with(
+        f"{BASE_URL}/gamecenter/2026020812/boxscore", follow_redirects=True
+    )
+    assert boxscore is not None

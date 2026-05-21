@@ -81,7 +81,7 @@ class NhlClient:
             return self._schedule_cache[cache_key]
 
         try:
-            resp = httpx.get(f"{BASE_URL}/schedule/now")
+            resp = httpx.get(f"{BASE_URL}/schedule/now", follow_redirects=True)
             resp.raise_for_status()
         except Exception:
             logger.exception("Failed to fetch NHL schedule")
@@ -132,7 +132,7 @@ class NhlClient:
             return self._boxscore_cache[game_id]
 
         try:
-            resp = httpx.get(f"{BASE_URL}/gamecenter/{game_id}/boxscore")
+            resp = httpx.get(f"{BASE_URL}/gamecenter/{game_id}/boxscore", follow_redirects=True)
             resp.raise_for_status()
         except Exception:
             logger.exception("Failed to fetch boxscore for game %s", game_id)
