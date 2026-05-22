@@ -1,10 +1,13 @@
 """APScheduler background jobs for the NHL Dashboard."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 _scheduler = BackgroundScheduler()
 _last_poll = None
@@ -43,74 +46,92 @@ def init_scheduler(app) -> None:
     """
     def _poll_slate():
         global _last_poll
-        with app.app_context():
-            from services.slate import build_slate
-            build_slate()
-        _last_poll = datetime.now(timezone.utc).replace(tzinfo=None)
+        try:
+            with app.app_context():
+                from services.slate import build_slate
+                build_slate()
+            _last_poll = datetime.now(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            logger.exception("poll_slate failed")
 
     def _poll_live():
-        with app.app_context():
-            from services.live import update_live_scores
-            update_live_scores()
+        try:
+            with app.app_context():
+                from services.live import update_live_scores
+                update_live_scores()
+        except Exception:
+            logger.exception("poll_live failed")
 
     def _poll_odds():
         from extensions import db
         from models import Game, OddsSnapshot
         from odds_client import get_odds
 
-        with app.app_context():
-            games = Game.query.all()
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-            for game in games:
-                odds = get_odds(game.id)
-                db.session.add(OddsSnapshot(
-                    game_id=game.id,
-                    fetched_at=now,
-                    book="consensus",
-                    away_ml=odds["ml"]["away"],
-                    home_ml=odds["ml"]["home"],
-                    away_implied=odds["implied"]["away"],
-                    home_implied=odds["implied"]["home"],
-                ))
-            db.session.commit()
+        try:
+            with app.app_context():
+                games = Game.query.all()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                for game in games:
+                    odds = get_odds(game.id)
+                    db.session.add(OddsSnapshot(
+                        game_id=game.id,
+                        fetched_at=now,
+                        book="consensus",
+                        away_ml=odds["ml"]["away"],
+                        home_ml=odds["ml"]["home"],
+                        away_implied=odds["implied"]["away"],
+                        home_implied=odds["implied"]["home"],
+                    ))
+                db.session.commit()
+        except Exception:
+            logger.exception("poll_odds failed")
 
     def _compute_fair():
         from extensions import db
         from models import Game, ModelFair, OddsSnapshot
         from services.implied import devig_two_way
 
-        with app.app_context():
-            games = Game.query.all()
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-            for game in games:
-                snapshot = (
-                    OddsSnapshot.query
-                    .filter_by(game_id=game.id)
-                    .order_by(OddsSnapshot.fetched_at.desc())
-                    .first()
-                )
-                if snapshot is None:
-                    continue
-                away_fair, home_fair = devig_two_way(
-                    snapshot.away_implied, snapshot.home_implied
-                )
-                fair = db.session.get(ModelFair, game.id)
-                if fair is None:
-                    fair = ModelFair(game_id=game.id)
-                    db.session.add(fair)
-                fair.away_fair = away_fair
-                fair.home_fair = home_fair
-                fair.computed_at = now
-            db.session.commit()
+        try:
+            with app.app_context():
+                games = Game.query.all()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                for game in games:
+                    snapshot = (
+                        OddsSnapshot.query
+                        .filter_by(game_id=game.id)
+                        .order_by(OddsSnapshot.fetched_at.desc())
+                        .first()
+                    )
+                    if snapshot is None:
+                        continue
+                    away_fair, home_fair = devig_two_way(
+                        snapshot.away_implied, snapshot.home_implied
+                    )
+                    fair = db.session.get(ModelFair, game.id)
+                    if fair is None:
+                        fair = ModelFair(game_id=game.id)
+                        db.session.add(fair)
+                    fair.away_fair = away_fair
+                    fair.home_fair = home_fair
+                    fair.computed_at = now
+                db.session.commit()
+        except Exception:
+            logger.exception("compute_fair failed")
 
     def _poll_standings():
-        with app.app_context():
-            from services.standings import build_standings
-            build_standings()
+        try:
+            with app.app_context():
+                from services.standings import build_standings
+                build_standings()
+        except Exception:
+            logger.exception("poll_standings failed")
 
     def _prune_snapshots():
-        with app.app_context():
-            prune_snapshots()
+        try:
+            with app.app_context():
+                prune_snapshots()
+        except Exception:
+            logger.exception("prune_snapshots failed")
 
     _scheduler.add_job(
         _poll_slate, "interval", minutes=5, id="poll_slate", replace_existing=True

@@ -1,6 +1,6 @@
 """Flask app factory."""
 
-from flask import Flask
+from flask import Flask, jsonify
 
 from config import Config
 from extensions import db
@@ -40,5 +40,13 @@ def create_app(test_config=None):
     app.register_blueprint(games_bp)
     app.register_blueprint(game_detail_bp)
     app.register_blueprint(logos_bp)
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "not_found"}), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return jsonify({"error": "server_error"}), 500
 
     return app

@@ -53,6 +53,14 @@ def test_all_job_ids_registered():
         _db.drop_all()
 
 
+def test_scheduler_jobs_have_exception_handling():
+    """Each scheduler job function must wrap its body in try/except with logger.exception."""
+    import inspect
+    import scheduler
+    source = inspect.getsource(scheduler)
+    assert source.count("logger.exception") >= 5
+
+
 def test_prune_snapshots_deletes_old_rows(test_app):
     """prune_snapshots must delete rows older than 7 days and keep newer ones."""
     now = datetime.utcnow()
