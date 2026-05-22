@@ -55,3 +55,60 @@ def test_team_glyph_uses_proxy_url():
     assert "/api/logos/" in content, (
         "TeamGlyph.jsx must use the backend proxy URL instead of the direct CDN"
     )
+
+
+# Issue #61 — StatusCell ET time formatting
+STATUS_CELL = COMPONENTS_DIR / "StatusCell.jsx"
+
+
+def test_status_cell_uses_intl_date_time_format():
+    content = STATUS_CELL.read_text()
+    assert "Intl.DateTimeFormat" in content, (
+        "StatusCell.jsx must use Intl.DateTimeFormat to format start time"
+    )
+
+
+def test_status_cell_uses_america_new_york_timezone():
+    content = STATUS_CELL.read_text()
+    assert "America/New_York" in content, (
+        "StatusCell.jsx must use America/New_York timezone for ET formatting"
+    )
+
+
+def test_status_cell_shows_et_label():
+    content = STATUS_CELL.read_text()
+    assert "ET" in content, (
+        "StatusCell.jsx must display 'ET' timezone label next to the time"
+    )
+
+
+def test_status_cell_shows_tonight_label():
+    content = STATUS_CELL.read_text()
+    assert "TONIGHT" in content, (
+        "StatusCell.jsx must display 'TONIGHT' for same-day games"
+    )
+
+
+def test_status_cell_shows_tomorrow_label():
+    content = STATUS_CELL.read_text()
+    assert "TOMORROW" in content, (
+        "StatusCell.jsx must display 'TOMORROW' for next-day games"
+    )
+
+
+def test_status_cell_handles_null_start():
+    content = STATUS_CELL.read_text()
+    assert "null" in content or "g.start" in content, (
+        "StatusCell.jsx must guard against null g.start"
+    )
+    # The fallback dash character must be present
+    assert "—" in content or '"—"' in content or "'—'" in content, (
+        "StatusCell.jsx must show em-dash for null start time"
+    )
+
+
+def test_status_cell_no_g_tz_reference():
+    content = STATUS_CELL.read_text()
+    assert "g.tz" not in content, (
+        "StatusCell.jsx must not reference g.tz (field does not exist in API shape)"
+    )
