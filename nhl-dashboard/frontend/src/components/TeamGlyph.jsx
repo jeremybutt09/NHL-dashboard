@@ -4,7 +4,7 @@ export default function TeamGlyph({ code, size = 32, dim = false }) {
   const [failed, setFailed] = useState(false);
   const hash = [...code].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) >>> 0;
   const hue = hash % 360;
-  const logoUrl = `https://assets.nhle.com/logos/nhl/svg/${code}_light.svg`;
+  const logoUrl = `/api/logos/${code}`;
 
   if (failed) {
     return (

@@ -8,6 +8,7 @@ import models  # noqa: F401 — registers models with SQLAlchemy
 from routes.health import health_bp
 from routes.games import games_bp
 from routes.game_detail import game_detail_bp
+from routes.logos import logos_bp
 
 
 def create_app(test_config=None):
@@ -38,5 +39,6 @@ def create_app(test_config=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(games_bp)
     app.register_blueprint(game_detail_bp)
+    app.register_blueprint(logos_bp)
 
     return app

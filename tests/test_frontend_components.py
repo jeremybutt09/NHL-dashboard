@@ -50,8 +50,8 @@ def test_sparkline_jsx_uses_svg():
     assert "svg" in content, "Sparkline.jsx must use an SVG element"
 
 
-def test_team_glyph_uses_nhle_asset_url():
+def test_team_glyph_uses_proxy_url():
     content = (COMPONENTS_DIR / "TeamGlyph.jsx").read_text()
-    assert "assets.nhle.com" in content, (
-        "TeamGlyph.jsx must reference the NHLE logo CDN URL"
+    assert "/api/logos/" in content, (
+        "TeamGlyph.jsx must use the backend proxy URL instead of the direct CDN"
     )
