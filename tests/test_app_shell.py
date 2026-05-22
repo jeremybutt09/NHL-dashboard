@@ -78,3 +78,22 @@ def test_app_jsx_main_padding_top_zero():
     assert "padding: '24px 32px'" not in src, (
         "App.jsx main must not have 24px top padding — FilterBar supplies the top gap"
     )
+
+
+# Issue #66 — Sort state wiring
+
+
+def test_app_jsx_has_sort_state():
+    """App.jsx must contain a sort-related useState call."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "sort" in src and "useState" in src, (
+        "App.jsx must declare sort state with useState"
+    )
+
+
+def test_app_jsx_derives_sorted_games():
+    """App.jsx must derive a sorted copy of games using .sort(."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert ".sort(" in src, "App.jsx must derive sortedGames using .sort("

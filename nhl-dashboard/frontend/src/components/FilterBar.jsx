@@ -1,6 +1,11 @@
-function SegmentButton({ label, value }) {
+import { useState } from 'react';
+
+const SORT_OPTIONS = ['edge-desc', 'edge-asc', 'time-asc'];
+const SORT_LABELS = { 'edge-desc': 'Edge ↓', 'edge-asc': 'Edge ↑', 'time-asc': 'Time ↑' };
+
+function SegmentButton({ label, value, onClick }) {
   return (
-    <button className="segment-btn">
+    <button className="segment-btn" onClick={onClick}>
       <span className="segment-btn-label">{label}</span>
       <span>{value}</span>
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -10,8 +15,15 @@ function SegmentButton({ label, value }) {
   );
 }
 
-export default function FilterBar({ games = [] }) {
+export default function FilterBar({ games = [], sort = 'edge-desc', onSortChange }) {
   const liveCount = games.filter((g) => g.status === 'live').length;
+
+  function handleSortCycle() {
+    if (!onSortChange) return;
+    const idx = SORT_OPTIONS.indexOf(sort);
+    onSortChange(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length]);
+  }
+
   return (
     <div className="filter-bar">
       <div className="filter-bar-title">
@@ -21,7 +33,7 @@ export default function FilterBar({ games = [] }) {
         </span>
       </div>
       <div className="filter-bar-controls">
-        <SegmentButton label="Sort" value="Edge ↓" />
+        <SegmentButton label="Sort" value={SORT_LABELS[sort]} onClick={handleSortCycle} />
         <SegmentButton label="Book" value="Consensus" />
         <SegmentButton label="Filter" value="All" />
       </div>
