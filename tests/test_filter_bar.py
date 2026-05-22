@@ -1,4 +1,4 @@
-"""Tests for FilterBar.jsx sort wiring (Issue #66)."""
+"""Tests for FilterBar.jsx sort and filter wiring (Issue #66, #67)."""
 import os
 
 COMPONENTS_DIR = os.path.join(
@@ -19,3 +19,20 @@ def test_filter_bar_exposes_sort_callback():
     with open(FILTER_BAR_PATH) as f:
         src = f.read()
     assert "onSortChange" in src, "FilterBar.jsx must reference onSortChange prop"
+
+
+# Issue #67 — Filter wiring
+
+
+def test_filter_bar_filter_control_present():
+    """FilterBar.jsx must render a Filter control with label text 'Filter'."""
+    with open(FILTER_BAR_PATH) as f:
+        src = f.read()
+    assert "Filter" in src, "FilterBar.jsx must contain 'Filter' label text"
+
+
+def test_filter_bar_exposes_filter_callback():
+    """FilterBar.jsx must accept an onFilterChange prop to notify parent of filter changes."""
+    with open(FILTER_BAR_PATH) as f:
+        src = f.read()
+    assert "onFilterChange" in src, "FilterBar.jsx must reference onFilterChange prop"

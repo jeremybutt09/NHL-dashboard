@@ -25,7 +25,7 @@ function SkeletonRow() {
   );
 }
 
-export default function SlateTable({ games = [], loading = false, state, density, book, market, history = {} }) {
+export default function SlateTable({ games = [], loading = false, state, density, book, market, history = {}, filterActive = false }) {
   const header = (
     <div style={{
       display: 'grid',
@@ -74,7 +74,7 @@ export default function SlateTable({ games = [], loading = false, state, density
             color: 'var(--muted)',
             fontSize: 14,
           }}>
-            No games scheduled today
+            {filterActive ? 'No games match this filter' : 'No games scheduled today'}
           </div>
         ) : (
           games.map((g) => (

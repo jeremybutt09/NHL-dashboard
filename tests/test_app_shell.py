@@ -97,3 +97,22 @@ def test_app_jsx_derives_sorted_games():
     with open(APP_PATH) as f:
         src = f.read()
     assert ".sort(" in src, "App.jsx must derive sortedGames using .sort("
+
+
+# Issue #67 — Filter state wiring
+
+
+def test_app_jsx_has_filter_state():
+    """App.jsx must contain a filter-related useState call."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "setFilter" in src, (
+        "App.jsx must declare filter state via useState (expected setFilter)"
+    )
+
+
+def test_app_jsx_passes_filtered_games_to_slate_table():
+    """App.jsx must derive filteredGames via .filter( and pass them to SlateTable."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert ".filter(" in src, "App.jsx must use .filter( to derive filteredGames"
