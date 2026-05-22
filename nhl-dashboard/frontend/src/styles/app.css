@@ -131,6 +131,8 @@ button.icon-btn:hover {
 /* ── Game row ────────────────────────────────────────────────────────────── */
 
 .game-row {
+  background: var(--paper);
+  cursor: pointer;
   transition: background-color .15s ease, border-color .15s ease;
 }
 

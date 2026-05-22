@@ -36,10 +36,18 @@ export default function SlateTable({ games = [], loading = false, state, density
       background: 'var(--paper)',
       position: 'sticky', top: 0, zIndex: 1,
     }}>
-      {['Status', 'Matchup · Score', 'Moneyline · Implied Win %', 'Line movement (24h)', 'Edge ↓', 'Details'].map((label) => (
+      {[
+        { label: 'Status' },
+        { label: 'Matchup · Score' },
+        { label: 'Moneyline · Implied Win %' },
+        { label: 'Line movement (24h)' },
+        { label: 'Edge ↓', textAlign: 'right' },
+        { label: 'Details', textAlign: 'right' },
+      ].map(({ label, textAlign }) => (
         <div key={label} style={{
           fontSize: 10, fontWeight: 600, color: 'var(--faint)',
           letterSpacing: '0.08em', textTransform: 'uppercase',
+          textAlign,
         }}>
           {label}
         </div>

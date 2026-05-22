@@ -15,18 +15,15 @@ export default function GameRow({ g, state, series, density, book, market }) {
     : <MoneylineCell g={g} state={state} book={book} />;
 
   return (
-    <div style={{ borderBottom: '1px solid var(--rule)', background: 'var(--paper)' }}>
-      <div
-        className="game-row slate-table-row"
-        onClick={toggle}
-        style={{
-          padding: `${padV}px 24px`,
-          background: expanded
-            ? 'color-mix(in oklab, var(--paper) 92%, var(--accent) 8%)'
-            : 'var(--paper)',
-          cursor: 'pointer',
-        }}
-      >
+    <div
+      className="game-row slate-table-row"
+      onClick={toggle}
+      style={{
+        borderBottom: '1px solid var(--rule)',
+        padding: `${padV}px 24px`,
+        ...(expanded ? { background: 'color-mix(in oklab, var(--paper) 92%, var(--accent) 8%)' } : {}),
+      }}
+    >
         <StatusCell g={g} state={state} />
         <MatchupCell g={g} state={state} density={density} />
         {MarketCell}
@@ -48,7 +45,6 @@ export default function GameRow({ g, state, series, density, book, market }) {
             <path d="M3 4.5L6 7.5L9 4.5" />
           </svg>
         </button>
-      </div>
     </div>
   );
 }

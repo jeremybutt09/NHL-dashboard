@@ -32,9 +32,10 @@ export default function Topbar({ density, onDensityChange }) {
   }, [dark]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('density');
-    if (saved && DENSITIES.includes(saved) && onDensityChange) {
-      onDensityChange(saved);
+    const initial = localStorage.getItem('density') || density;
+    document.documentElement.setAttribute('data-density', initial);
+    if (initial !== density && DENSITIES.includes(initial) && onDensityChange) {
+      onDensityChange(initial);
     }
   }, []);
 

@@ -1,4 +1,4 @@
-"""Tests for extracted frontend CSS tokens and component styles (Issue #43)."""
+"""Tests for extracted frontend CSS tokens and component styles (Issues #43, #60)."""
 import re
 import pathlib
 
@@ -8,6 +8,14 @@ STYLES_DIR = (
     / "frontend"
     / "src"
     / "styles"
+)
+
+COMPONENTS_DIR = (
+    pathlib.Path(__file__).parent.parent
+    / "nhl-dashboard"
+    / "frontend"
+    / "src"
+    / "components"
 )
 
 
@@ -40,3 +48,72 @@ def test_no_hardcoded_hex_in_app_css():
     assert not re.search(r"#[0-9a-fA-F]{3,6}\b", no_comments), (
         "app.css contains hardcoded hex color values"
     )
+
+
+# ── Issue #60 design-match tests ─────────────────────────────────────────────
+
+def test_app_css_game_row_has_default_background():
+    """`.game-row` must declare `background: var(--paper)` so the CSS hover rule
+    can override it without being beaten by an always-on inline style."""
+    app_css = (STYLES_DIR / "app.css").read_text()
+    assert "background: var(--paper)" in app_css, (
+        ".game-row must set background: var(--paper) in app.css"
+    )
+
+
+def test_app_css_game_row_has_cursor_pointer():
+    """`.game-row` must declare `cursor: pointer` so the whole row shows
+    the pointer cursor, matching the reference prototype."""
+    app_css = (STYLES_DIR / "app.css").read_text()
+    assert "cursor: pointer" in app_css, (
+        ".game-row must include cursor: pointer in app.css"
+    )
+
+
+def test_app_css_has_pulse_dot_keyframes():
+    """The `@keyframes pulse-dot` animation must exist for the live indicator dot."""
+    app_css = (STYLES_DIR / "app.css").read_text()
+    assert "@keyframes pulse-dot" in app_css
+
+
+def test_slate_table_edge_header_right_aligned():
+    """The 'Edge' and 'Details' column headers in SlateTable must use
+    textAlign right to match the reference prototype."""
+    content = (COMPONENTS_DIR / "SlateTable.jsx").read_text()
+    assert "textAlign: 'right'" in content, (
+        "SlateTable.jsx must use textAlign: 'right' for Edge/Details column headers"
+    )
+
+
+def test_game_row_no_unconditional_paper_background():
+    """GameRow must not apply background: var(--paper) as an unconditional
+    inline style — the default background must come from the CSS class so
+    hover can override it."""
+    content = (COMPONENTS_DIR / "GameRow.jsx").read_text()
+    assert "background: 'var(--paper)'" not in content, (
+        "GameRow.jsx must not set background: 'var(--paper)' as an inline style; "
+        "use the CSS class instead so hover works correctly"
+    )
+
+
+def test_topbar_sets_data_density_on_mount():
+    """Topbar must call setAttribute('data-density', ...) on initial mount so
+    the CSS [data-density] density rules apply from the first render."""
+    content = (COMPONENTS_DIR / "Topbar.jsx").read_text()
+    assert "setAttribute('data-density'" in content, (
+        "Topbar.jsx must set data-density attribute on mount"
+    )
+
+
+def test_index_html_has_geist_font_links():
+    """index.html must include Geist and Geist Mono font preconnect/stylesheet
+    links from Google Fonts."""
+    index_html = (
+        pathlib.Path(__file__).parent.parent
+        / "nhl-dashboard"
+        / "frontend"
+        / "index.html"
+    ).read_text()
+    assert "Geist" in index_html, "index.html must link Geist font"
+    assert "Geist+Mono" in index_html, "index.html must link Geist Mono font"
+    assert "fonts.googleapis.com" in index_html
