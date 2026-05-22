@@ -184,3 +184,22 @@ def test_stat_strip_handles_empty_games():
     assert "games.length > 0" in content, (
         "StatStrip.jsx must guard against an empty games array (e.g. games.length > 0 check)"
     )
+
+
+# Issue #73 — Sharp Action stat card
+
+
+def test_stat_strip_computes_sharp_action():
+    """StatStrip.jsx must reference movement_24h to compute sharpCount client-side."""
+    content = (COMPONENTS_DIR / "StatStrip.jsx").read_text()
+    assert "movement_24h" in content, (
+        "StatStrip.jsx must reference movement_24h to compute the Sharp action count"
+    )
+
+
+def test_stat_strip_sharp_action_not_stub():
+    """StatStrip.jsx must no longer show the 'no data yet' placeholder."""
+    content = (COMPONENTS_DIR / "StatStrip.jsx").read_text()
+    assert "no data yet" not in content, (
+        "StatStrip.jsx must not contain the stub text 'no data yet'"
+    )

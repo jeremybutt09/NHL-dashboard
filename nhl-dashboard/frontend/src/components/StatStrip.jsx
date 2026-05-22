@@ -6,6 +6,11 @@ export default function StatStrip({ games = [] }) {
     ? games.reduce((a, g) => a + (g.implied?.away ?? 50), 0) / games.length
     : 0;
 
+  const sharpCount = games.filter((g) => {
+    const m = g.movement_24h;
+    return Array.isArray(m) && m.length >= 2 && m[0] - m[m.length - 1] >= 3.0;
+  }).length;
+
   const stats = [
     {
       label: 'Games tonight',
@@ -20,8 +25,8 @@ export default function StatStrip({ games = [] }) {
     },
     {
       label: 'Sharp action',
-      value: '—',
-      sub: 'no data yet',
+      value: sharpCount,
+      sub: sharpCount === 0 ? 'no significant moves' : sharpCount === 1 ? 'game moving' : 'games moving',
     },
     {
       label: 'Avg implied (away)',
