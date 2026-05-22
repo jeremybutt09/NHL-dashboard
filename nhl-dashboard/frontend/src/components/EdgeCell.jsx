@@ -27,7 +27,7 @@ export default function EdgeCell({ edge }) {
         border: strong
           ? `1px solid ${positive ? 'var(--up)' : 'var(--down)'}`
           : '1px solid transparent',
-      }} className="mono tnum">
+      }} className={`mono tnum ${positive ? 'edge-positive' : 'edge-negative'}`}>
         {positive ? '+' : ''}{edge.toFixed(1)}%
       </div>
       <span style={{ fontSize: 10, color: 'var(--faint)', letterSpacing: '0.04em' }}>FAIR vs MKT</span>
