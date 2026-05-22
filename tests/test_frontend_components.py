@@ -162,3 +162,14 @@ def test_stat_strip_retains_accent_inline_color():
     assert "accent" in content, (
         "StatStrip.jsx must retain the s.accent conditional inline color"
     )
+
+
+# Issue #68 — SlateTable sticky header uses --topbar-h offset
+
+def test_slate_table_sticky_header_uses_topbar_var():
+    """SlateTable.jsx header must use var(--topbar-h) for its sticky top offset
+    so it stays below the Topbar when the page scrolls."""
+    content = (COMPONENTS_DIR / "SlateTable.jsx").read_text()
+    assert "--topbar-h" in content, (
+        "SlateTable.jsx must reference --topbar-h in the sticky header top offset"
+    )

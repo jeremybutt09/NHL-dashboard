@@ -34,7 +34,7 @@ export default function SlateTable({ games = [], loading = false, state, density
       padding: '12px 24px',
       borderBottom: '1px solid var(--rule)',
       background: 'var(--paper)',
-      position: 'sticky', top: 0, zIndex: 1,
+      position: 'sticky', top: 'var(--topbar-h)', zIndex: 1,
     }}>
       {[
         { label: 'Status' },

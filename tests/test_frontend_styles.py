@@ -148,3 +148,12 @@ def test_app_css_contains_stat_strip_classes():
     app_css = (STYLES_DIR / "app.css").read_text()
     for cls in _STAT_STRIP_CLASSES:
         assert cls in app_css, f"app.css must contain {cls}"
+
+
+# ── Issue #68 sticky header top offset ───────────────────────────────────────
+
+def test_tokens_css_defines_topbar_height():
+    """tokens.css must define --topbar-h so the SlateTable header offset
+    can be adjusted in one place."""
+    tokens = (STYLES_DIR / "tokens.css").read_text()
+    assert "--topbar-h" in tokens, "tokens.css must define the --topbar-h CSS variable"
