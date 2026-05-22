@@ -61,6 +61,24 @@ def test_scheduler_jobs_have_exception_handling():
     assert source.count("logger.exception") >= 5
 
 
+def test_poll_slate_logs_exception_on_failure():
+    """_poll_slate must log via logger.exception with its own name when build_slate raises."""
+    with patch("scheduler._scheduler.start"):
+        app = create_app({
+            "TESTING": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        })
+
+    from scheduler import _scheduler
+    job = _scheduler.get_job("poll_slate")
+
+    with patch("services.slate.build_slate", side_effect=Exception("nhl api down")), \
+         patch("scheduler.logger") as mock_logger:
+        job.func()
+
+    mock_logger.exception.assert_called_once_with("_poll_slate failed")
+
+
 def test_prune_snapshots_deletes_old_rows(test_app):
     """prune_snapshots must delete rows older than 7 days and keep newer ones."""
     now = datetime.utcnow()

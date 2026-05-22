@@ -52,7 +52,7 @@ def init_scheduler(app) -> None:
                 build_slate()
             _last_poll = datetime.now(timezone.utc).replace(tzinfo=None)
         except Exception:
-            logger.exception("poll_slate failed")
+            logger.exception("_poll_slate failed")
 
     def _poll_live():
         try:
@@ -60,7 +60,7 @@ def init_scheduler(app) -> None:
                 from services.live import update_live_scores
                 update_live_scores()
         except Exception:
-            logger.exception("poll_live failed")
+            logger.exception("_poll_live failed")
 
     def _poll_odds():
         from extensions import db
@@ -84,7 +84,7 @@ def init_scheduler(app) -> None:
                     ))
                 db.session.commit()
         except Exception:
-            logger.exception("poll_odds failed")
+            logger.exception("_poll_odds failed")
 
     def _compute_fair():
         from extensions import db
@@ -116,7 +116,7 @@ def init_scheduler(app) -> None:
                     fair.computed_at = now
                 db.session.commit()
         except Exception:
-            logger.exception("compute_fair failed")
+            logger.exception("_compute_fair failed")
 
     def _poll_standings():
         try:
@@ -124,14 +124,14 @@ def init_scheduler(app) -> None:
                 from services.standings import build_standings
                 build_standings()
         except Exception:
-            logger.exception("poll_standings failed")
+            logger.exception("_poll_standings failed")
 
     def _prune_snapshots():
         try:
             with app.app_context():
                 prune_snapshots()
         except Exception:
-            logger.exception("prune_snapshots failed")
+            logger.exception("_prune_snapshots failed")
 
     _scheduler.add_job(
         _poll_slate, "interval", minutes=5, id="poll_slate", replace_existing=True
