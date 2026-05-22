@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { usePolling } from './hooks/usePolling';
 import Topbar from './components/Topbar';
+import FilterBar from './components/FilterBar';
+import StatStrip from './components/StatStrip';
 import SlateTable from './components/SlateTable';
 import ErrorToast from './components/ErrorToast';
 
@@ -31,8 +33,10 @@ export default function App() {
   return (
     <div id="app" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Topbar density={density} onDensityChange={setDensity} />
+      <FilterBar games={games} />
 
-      <main style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 32px' }}>
+      <main style={{ maxWidth: 1400, margin: '0 auto', padding: '0 32px' }}>
+        <StatStrip games={games} />
         <SlateTable games={games} loading={loading && !data} density={density} />
       </main>
 

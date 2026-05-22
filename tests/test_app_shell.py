@@ -37,3 +37,44 @@ def test_topbar_jsx_density_toggle_present():
     with open(TOPBAR_PATH) as f:
         src = f.read()
     assert "density" in src, "Topbar.jsx must reference density toggle"
+
+
+# Issue #64 — FilterBar and StatStrip mounting
+
+
+def test_app_jsx_imports_filter_bar():
+    """Assert App.jsx imports FilterBar."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "FilterBar" in src, "App.jsx must import FilterBar"
+
+
+def test_app_jsx_renders_filter_bar():
+    """Assert App.jsx renders <FilterBar> with a games prop."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "<FilterBar" in src, "App.jsx must render <FilterBar>"
+    assert "games" in src, "App.jsx must pass games prop to FilterBar"
+
+
+def test_app_jsx_imports_stat_strip():
+    """Assert App.jsx imports StatStrip."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "StatStrip" in src, "App.jsx must import StatStrip"
+
+
+def test_app_jsx_renders_stat_strip():
+    """Assert App.jsx renders <StatStrip> with a games prop."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "<StatStrip" in src, "App.jsx must render <StatStrip>"
+
+
+def test_app_jsx_main_padding_top_zero():
+    """Assert App.jsx main element has no top padding (FilterBar supplies gap)."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "padding: '24px 32px'" not in src, (
+        "App.jsx main must not have 24px top padding — FilterBar supplies the top gap"
+    )

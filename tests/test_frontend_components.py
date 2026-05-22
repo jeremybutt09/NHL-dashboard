@@ -112,3 +112,24 @@ def test_status_cell_no_g_tz_reference():
     assert "g.tz" not in content, (
         "StatusCell.jsx must not reference g.tz (field does not exist in API shape)"
     )
+
+
+# Issue #64 — FilterBar and StatStrip component files exist
+
+
+def test_filter_bar_component_exists():
+    path = COMPONENTS_DIR / "FilterBar.jsx"
+    assert path.exists(), "FilterBar.jsx must exist in components/"
+    content = path.read_text()
+    assert "export default function FilterBar" in content, (
+        "FilterBar.jsx must export a default FilterBar function"
+    )
+
+
+def test_stat_strip_component_exists():
+    path = COMPONENTS_DIR / "StatStrip.jsx"
+    assert path.exists(), "StatStrip.jsx must exist in components/"
+    content = path.read_text()
+    assert "export default function StatStrip" in content, (
+        "StatStrip.jsx must export a default StatStrip function"
+    )
