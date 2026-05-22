@@ -173,3 +173,14 @@ def test_slate_table_sticky_header_uses_topbar_var():
     assert "--topbar-h" in content, (
         "SlateTable.jsx must reference --topbar-h in the sticky header top offset"
     )
+
+
+# Issue #71 — StatStrip empty-games guard
+
+
+def test_stat_strip_handles_empty_games():
+    """StatStrip.jsx must guard against division-by-zero when games is an empty list."""
+    content = (COMPONENTS_DIR / "StatStrip.jsx").read_text()
+    assert "games.length > 0" in content, (
+        "StatStrip.jsx must guard against an empty games array (e.g. games.length > 0 check)"
+    )

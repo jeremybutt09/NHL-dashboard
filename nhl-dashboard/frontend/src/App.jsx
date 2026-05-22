@@ -46,10 +46,10 @@ export default function App() {
   return (
     <div id="app" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Topbar density={density} onDensityChange={setDensity} />
-      <FilterBar games={games} sort={sort} onSortChange={setSort} filter={filter} onFilterChange={setFilter} />
+      <FilterBar games={games} sort={sort} onSortChange={setSort} filter={filter} onFilterChange={setFilter} loading={loading && !data} />
 
       <main style={{ maxWidth: 1400, margin: '0 auto', padding: '0 32px' }}>
-        <StatStrip games={games} />
+        {!(loading && !data) && <StatStrip games={games} />}
         <SlateTable games={filteredGames} loading={loading && !data} density={density} filterActive={filter !== 'all'} />
       </main>
 

@@ -116,3 +116,16 @@ def test_app_jsx_passes_filtered_games_to_slate_table():
     with open(APP_PATH) as f:
         src = f.read()
     assert ".filter(" in src, "App.jsx must use .filter( to derive filteredGames"
+
+
+# Issue #71 — Guard StatStrip and FilterBar against initial loading state
+
+
+def test_app_jsx_guards_stat_strip_on_loading():
+    """App.jsx must wrap StatStrip in a loading guard so zeros are not shown during initial load."""
+    with open(APP_PATH) as f:
+        src = f.read()
+    assert "!(loading && !data)" in src, (
+        "App.jsx must conditionally render StatStrip with !(loading && !data) "
+        "so zero-state counts are not shown during the initial data fetch"
+    )

@@ -18,7 +18,7 @@ function SegmentButton({ label, value, onClick }) {
   );
 }
 
-export default function FilterBar({ games = [], sort = 'edge-desc', onSortChange, filter = 'all', onFilterChange }) {
+export default function FilterBar({ games = [], sort = 'edge-desc', onSortChange, filter = 'all', onFilterChange, loading = false }) {
   const liveCount = games.filter((g) => g.status === 'live').length;
 
   function handleSortCycle() {
@@ -38,7 +38,7 @@ export default function FilterBar({ games = [], sort = 'edge-desc', onSortChange
       <div className="filter-bar-title">
         <h1>Tonight's slate</h1>
         <span>
-          {games.length} game{games.length !== 1 ? 's' : ''}{liveCount > 0 ? ` · ${liveCount} in progress` : ''}
+          {loading ? 'Loading…' : `${games.length} game${games.length !== 1 ? 's' : ''}${liveCount > 0 ? ` · ${liveCount} in progress` : ''}`}
         </span>
       </div>
       <div className="filter-bar-controls">

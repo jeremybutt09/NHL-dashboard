@@ -36,3 +36,15 @@ def test_filter_bar_exposes_filter_callback():
     with open(FILTER_BAR_PATH) as f:
         src = f.read()
     assert "onFilterChange" in src, "FilterBar.jsx must reference onFilterChange prop"
+
+
+# Issue #71 — FilterBar loading indicator
+
+
+def test_filter_bar_shows_loading_indicator():
+    """FilterBar.jsx must accept a loading prop and show 'Loading…' in the subtitle when true."""
+    with open(FILTER_BAR_PATH) as f:
+        src = f.read()
+    assert "Loading" in src, (
+        "FilterBar.jsx must display 'Loading…' in the subtitle when the loading prop is truthy"
+    )
