@@ -31,32 +31,18 @@ export default function StatStrip({ games = [] }) {
   ];
 
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14,
-      padding: '0 32px 16px',
-    }}>
+    <div className="stat-strip">
       {stats.map((s) => (
-        <div key={s.label} style={{
-          padding: '14px 16px',
-          background: 'var(--paper)',
-          border: '1px solid var(--rule)',
-          borderRadius: 12,
-          boxShadow: 'var(--shadow)',
-        }}>
-          <div style={{
-            fontSize: 11, color: 'var(--faint)', letterSpacing: '0.06em',
-            textTransform: 'uppercase', marginBottom: 6,
-          }}>
-            {s.label}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span className="mono tnum" style={{
-              fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em',
-              color: s.accent ? 'var(--accent-deep)' : 'var(--ink)',
-            }}>
+        <div key={s.label} className="stat-card">
+          <div className="stat-card-label">{s.label}</div>
+          <div className="stat-card-value-row">
+            <span
+              className="mono tnum stat-card-value"
+              style={{ color: s.accent ? 'var(--accent-deep)' : 'var(--ink)' }}
+            >
               {s.value}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{s.sub}</span>
+            <span className="stat-card-sub">{s.sub}</span>
           </div>
         </div>
       ))}

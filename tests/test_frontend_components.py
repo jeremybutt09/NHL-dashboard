@@ -133,3 +133,32 @@ def test_stat_strip_component_exists():
     assert "export default function StatStrip" in content, (
         "StatStrip.jsx must export a default StatStrip function"
     )
+
+
+# Issue #65 — FilterBar and StatStrip use className instead of inline styles
+
+
+def test_filter_bar_uses_class_names():
+    """FilterBar.jsx must use className for static layout; inline style= only for
+    dynamic values."""
+    content = (COMPONENTS_DIR / "FilterBar.jsx").read_text()
+    assert 'className=' in content, (
+        "FilterBar.jsx must use className attributes (not only inline style=)"
+    )
+
+
+def test_stat_strip_uses_class_names():
+    """StatStrip.jsx must use className for static layout."""
+    content = (COMPONENTS_DIR / "StatStrip.jsx").read_text()
+    assert 'className=' in content, (
+        "StatStrip.jsx must use className attributes (not only inline style=)"
+    )
+
+
+def test_stat_strip_retains_accent_inline_color():
+    """StatStrip.jsx must keep the dynamic accent color as an inline style because
+    it is conditionally computed from s.accent at render time."""
+    content = (COMPONENTS_DIR / "StatStrip.jsx").read_text()
+    assert "accent" in content, (
+        "StatStrip.jsx must retain the s.accent conditional inline color"
+    )

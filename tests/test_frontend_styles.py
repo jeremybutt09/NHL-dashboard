@@ -117,3 +117,34 @@ def test_index_html_has_geist_font_links():
     assert "Geist" in index_html, "index.html must link Geist font"
     assert "Geist+Mono" in index_html, "index.html must link Geist Mono font"
     assert "fonts.googleapis.com" in index_html
+
+
+# ── Issue #65 FilterBar and StatStrip className refactor ─────────────────────
+
+_FILTER_BAR_CLASSES = [
+    ".filter-bar",
+    ".filter-bar-title",
+    ".filter-bar-controls",
+    ".segment-btn",
+]
+
+_STAT_STRIP_CLASSES = [
+    ".stat-strip",
+    ".stat-card",
+    ".stat-card-label",
+    ".stat-card-value",
+]
+
+
+def test_app_css_contains_filter_bar_classes():
+    """app.css must define all FilterBar layout classes."""
+    app_css = (STYLES_DIR / "app.css").read_text()
+    for cls in _FILTER_BAR_CLASSES:
+        assert cls in app_css, f"app.css must contain {cls}"
+
+
+def test_app_css_contains_stat_strip_classes():
+    """app.css must define all StatStrip layout classes."""
+    app_css = (STYLES_DIR / "app.css").read_text()
+    for cls in _STAT_STRIP_CLASSES:
+        assert cls in app_css, f"app.css must contain {cls}"
