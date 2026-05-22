@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from config import Config
+
 _scheduler = BackgroundScheduler()
 _last_poll = None
 
@@ -101,6 +103,11 @@ def init_scheduler(app) -> None:
                 fair.computed_at = now
             db.session.commit()
 
+    def _poll_standings():
+        with app.app_context():
+            from services.standings import build_standings
+            build_standings()
+
     def _prune_snapshots():
         with app.app_context():
             prune_snapshots()
@@ -116,6 +123,10 @@ def init_scheduler(app) -> None:
     )
     _scheduler.add_job(
         _compute_fair, "interval", minutes=5, id="compute_fair", replace_existing=True
+    )
+    _scheduler.add_job(
+        _poll_standings, "interval", seconds=Config.POLL_STANDINGS_INTERVAL,
+        id="poll_standings", replace_existing=True,
     )
     _scheduler.add_job(
         _prune_snapshots, "interval", hours=1, id="prune_snapshots", replace_existing=True

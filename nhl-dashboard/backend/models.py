@@ -8,6 +8,12 @@ class Team(db.Model):
 
     code = db.Column(db.String(3), primary_key=True)
     name = db.Column(db.String(64))
+    wins = db.Column(db.Integer, default=0)
+    losses = db.Column(db.Integer, default=0)
+    ot_losses = db.Column(db.Integer, default=0)
+    l10_wins = db.Column(db.Integer, default=0)
+    l10_losses = db.Column(db.Integer, default=0)
+    l10_ot_losses = db.Column(db.Integer, default=0)
 
 
 class Game(db.Model):

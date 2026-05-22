@@ -14,3 +14,4 @@ class Config:
     POLL_SLATE_INTERVAL = int(os.getenv("POLL_SLATE_INTERVAL", "300"))
     POLL_LIVE_INTERVAL = int(os.getenv("POLL_LIVE_INTERVAL", "15"))
     POLL_ODDS_INTERVAL = int(os.getenv("POLL_ODDS_INTERVAL", "300"))
+    POLL_STANDINGS_INTERVAL = int(os.getenv("POLL_STANDINGS_INTERVAL", "3600"))

@@ -59,11 +59,13 @@ class NhlClient:
         live_ttl: Cache TTL in seconds for boxscore responses.
     """
 
-    def __init__(self, slate_ttl: int = None, live_ttl: int = None):
+    def __init__(self, slate_ttl: int = None, live_ttl: int = None, standings_ttl: int = None):
         slate_ttl = slate_ttl if slate_ttl is not None else Config.POLL_SLATE_INTERVAL
         live_ttl = live_ttl if live_ttl is not None else Config.POLL_LIVE_INTERVAL
+        standings_ttl = standings_ttl if standings_ttl is not None else Config.POLL_STANDINGS_INTERVAL
         self._schedule_cache: TTLCache = TTLCache(maxsize=1, ttl=slate_ttl)
         self._boxscore_cache: TTLCache = TTLCache(maxsize=64, ttl=live_ttl)
+        self._standings_cache: TTLCache = TTLCache(maxsize=1, ttl=standings_ttl)
 
     def _today(self) -> str:
         """Return today's UTC date as YYYY-MM-DD (isolated for easy mocking)."""
@@ -150,6 +152,54 @@ class NhlClient:
         }
         self._boxscore_cache[game_id] = parsed
         return parsed
+
+    def get_standings(self) -> Optional[dict]:
+        """Fetch current NHL standings, caching the result.
+
+        Returns:
+            Dict keyed by team abbreviation, each value a dict with wins,
+            losses, ot_losses, l10_wins, l10_losses, l10_ot_losses. None on
+            HTTP error.
+        """
+        cache_key = "standings"
+        if cache_key in self._standings_cache:
+            return self._standings_cache[cache_key]
+
+        try:
+            resp = httpx.get(f"{BASE_URL}/standings/now", follow_redirects=True)
+            resp.raise_for_status()
+        except Exception:
+            logger.exception("Failed to fetch NHL standings")
+            return None
+
+        standings = self._parse_standings(resp.json())
+        self._standings_cache[cache_key] = standings
+        return standings
+
+    def _parse_standings(self, data: dict) -> dict:
+        """Extract per-team standings from the standings API response.
+
+        Args:
+            data: Raw JSON from GET /v1/standings/now.
+
+        Returns:
+            Dict keyed by team abbreviation string with wins, losses,
+            ot_losses, l10_wins, l10_losses, l10_ot_losses integer fields.
+        """
+        result = {}
+        for entry in data.get("standings", []):
+            abbrev = entry.get("teamAbbrev", {}).get("default", "")
+            if not abbrev:
+                continue
+            result[abbrev] = {
+                "wins": entry.get("wins", 0),
+                "losses": entry.get("losses", 0),
+                "ot_losses": entry.get("otLosses", 0),
+                "l10_wins": entry.get("l10Wins", 0),
+                "l10_losses": entry.get("l10Losses", 0),
+                "l10_ot_losses": entry.get("l10OtLosses", 0),
+            }
+        return result
 
 
 # Module-level singleton used by services.

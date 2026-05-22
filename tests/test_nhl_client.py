@@ -10,6 +10,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "nhl-dashboard"
 
 from nhl_client import NhlClient, BASE_URL  # noqa: E402
 
+STANDINGS_FIXTURE = {
+    "standings": [
+        {
+            "teamAbbrev": {"default": "TOR"},
+            "wins": 24,
+            "losses": 18,
+            "otLosses": 4,
+            "l10Wins": 6,
+            "l10Losses": 3,
+            "l10OtLosses": 1,
+        }
+    ]
+}
+
 SCHEDULE_FIXTURE = {
     "gameWeek": [
         {
@@ -133,3 +147,29 @@ def test_get_boxscore_follows_redirects():
         f"{BASE_URL}/gamecenter/2026020812/boxscore", follow_redirects=True
     )
     assert boxscore is not None
+
+
+def test_get_standings_returns_parsed_dict():
+    """Mock HTTP; assert returns a dict keyed by abbrev with standings fields."""
+    client = NhlClient(slate_ttl=60, live_ttl=15, standings_ttl=60)
+    with patch("httpx.get", return_value=_ok_response(STANDINGS_FIXTURE)):
+        standings = client.get_standings()
+
+    assert isinstance(standings, dict)
+    assert "TOR" in standings
+    tor = standings["TOR"]
+    assert tor["wins"] == 24
+    assert tor["losses"] == 18
+    assert tor["ot_losses"] == 4
+    assert tor["l10_wins"] == 6
+    assert tor["l10_losses"] == 3
+    assert tor["l10_ot_losses"] == 1
+
+
+def test_get_standings_returns_none_on_http_error():
+    """Mock a failing response; assert None is returned without raising."""
+    client = NhlClient(slate_ttl=60, live_ttl=15, standings_ttl=60)
+    with patch("httpx.get", return_value=_error_response()):
+        result = client.get_standings()
+
+    assert result is None

@@ -40,14 +40,26 @@ def _build_game_row(game: Game) -> dict:
         "away": {
             "code": game.away_code,
             "name": away_team.name if away_team else "",
-            "record": "",
-            "l10": "",
+            "record": (
+                f"{away_team.wins}-{away_team.losses}-{away_team.ot_losses}"
+                if away_team else ""
+            ),
+            "l10": (
+                f"{away_team.l10_wins}-{away_team.l10_losses}-{away_team.l10_ot_losses}"
+                if away_team else ""
+            ),
         },
         "home": {
             "code": game.home_code,
             "name": home_team.name if home_team else "",
-            "record": "",
-            "l10": "",
+            "record": (
+                f"{home_team.wins}-{home_team.losses}-{home_team.ot_losses}"
+                if home_team else ""
+            ),
+            "l10": (
+                f"{home_team.l10_wins}-{home_team.l10_losses}-{home_team.l10_ot_losses}"
+                if home_team else ""
+            ),
         },
         "start": game.start_utc.strftime("%Y-%m-%dT%H:%M:%SZ") if game.start_utc else None,
         "venue": game.venue,
