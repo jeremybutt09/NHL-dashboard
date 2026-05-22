@@ -3,6 +3,7 @@
 import os
 import sys
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -83,3 +84,30 @@ def test_game_detail_stub_returns_200(client, seeded_game):
     """GET /api/games/<id> with a seeded game should return 200."""
     response = client.get("/api/games/2026020812")
     assert response.status_code == 200
+
+
+def test_game_detail_includes_series_field(client, seeded_game):
+    """GET /api/games/<id> response must include a 'series' key."""
+    mock_series = {"away_wins": 2, "home_wins": 1, "games_played": 3}
+    with patch("routes.game_detail.nhl_client") as mock_client:
+        mock_client.get_series.return_value = mock_series
+        response = client.get("/api/games/2026020812")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "series" in data
+    assert data["series"]["away_wins"] == 2
+    assert data["series"]["home_wins"] == 1
+    assert data["series"]["games_played"] == 3
+
+
+def test_game_detail_series_null_when_client_fails(client, seeded_game):
+    """GET /api/games/<id> must return series=null when schedule fetch fails."""
+    with patch("routes.game_detail.nhl_client") as mock_client:
+        mock_client.get_series.return_value = None
+        response = client.get("/api/games/2026020812")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "series" in data
+    assert data["series"] is None

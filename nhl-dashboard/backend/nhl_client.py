@@ -17,6 +17,9 @@ _PERIOD_LABELS = {1: "1st", 2: "2nd", 3: "3rd"}
 _LIVE_STATES = {"LIVE", "CRIT"}
 _FINAL_STATES = {"FINAL", "OFF"}
 
+# gameType 2 = regular season, 3 = playoffs
+_SERIES_GAME_TYPES = {2, 3}
+
 
 def _map_game_state(state: str) -> str:
     """Normalize NHL gameState codes to our status vocabulary.
@@ -66,6 +69,7 @@ class NhlClient:
         self._schedule_cache: TTLCache = TTLCache(maxsize=1, ttl=slate_ttl)
         self._boxscore_cache: TTLCache = TTLCache(maxsize=64, ttl=live_ttl)
         self._standings_cache: TTLCache = TTLCache(maxsize=1, ttl=standings_ttl)
+        self._team_schedule_cache: TTLCache = TTLCache(maxsize=32, ttl=slate_ttl)
 
     def _today(self) -> str:
         """Return today's UTC date as YYYY-MM-DD (isolated for easy mocking)."""
@@ -175,6 +179,86 @@ class NhlClient:
         standings = self._parse_standings(resp.json())
         self._standings_cache[cache_key] = standings
         return standings
+
+    def get_team_schedule(self, team_code: str) -> Optional[list]:
+        """Fetch the full-season schedule for a team, caching the result.
+
+        Args:
+            team_code: Three-letter team abbreviation (e.g. 'TOR').
+
+        Returns:
+            Raw list of game dicts from the NHL club-schedule-season endpoint,
+            or None on HTTP error.
+        """
+        if team_code in self._team_schedule_cache:
+            return self._team_schedule_cache[team_code]
+
+        try:
+            resp = httpx.get(
+                f"{BASE_URL}/club-schedule-season/{team_code}/now",
+                follow_redirects=True,
+            )
+            resp.raise_for_status()
+        except Exception:
+            logger.exception("Failed to fetch team schedule for %s", team_code)
+            return None
+
+        games = resp.json().get("games", [])
+        self._team_schedule_cache[team_code] = games
+        return games
+
+    def get_series(self, away_code: str, home_code: str) -> Optional[dict]:
+        """Compute the season series record between two teams.
+
+        Fetches the away team's schedule and counts completed regular-season
+        and playoff games against the home team.
+
+        Args:
+            away_code: Abbreviation of today's away team (e.g. 'TOR').
+            home_code: Abbreviation of today's home team (e.g. 'BOS').
+
+        Returns:
+            Dict with away_wins, home_wins, and games_played, or None if the
+            schedule API is unavailable.
+        """
+        games = self.get_team_schedule(away_code)
+        if games is None:
+            return None
+
+        away_wins = 0
+        home_wins = 0
+        games_played = 0
+
+        for game in games:
+            if game.get("gameType") not in _SERIES_GAME_TYPES:
+                continue
+            if game.get("gameState") not in _FINAL_STATES:
+                continue
+
+            g_away = game.get("awayTeam", {}).get("abbrev", "")
+            g_home = game.get("homeTeam", {}).get("abbrev", "")
+
+            if {g_away, g_home} != {away_code, home_code}:
+                continue
+
+            games_played += 1
+            g_away_score = game.get("awayTeam", {}).get("score", 0)
+            g_home_score = game.get("homeTeam", {}).get("score", 0)
+
+            # Determine which of today's teams won this historical game.
+            if g_away == away_code:
+                if g_away_score > g_home_score:
+                    away_wins += 1
+                else:
+                    home_wins += 1
+            else:
+                # away_code was home in this game
+                if g_home_score > g_away_score:
+                    away_wins += 1
+                else:
+                    home_wins += 1
+
+        return {"away_wins": away_wins, "home_wins": home_wins, "games_played": games_played}
 
     def _parse_standings(self, data: dict) -> dict:
         """Extract per-team standings from the standings API response.
