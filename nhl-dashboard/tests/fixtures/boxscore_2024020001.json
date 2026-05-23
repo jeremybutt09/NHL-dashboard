@@ -1,0 +1,32 @@
+{
+  "id": 2024020001,
+  "season": 20232024,
+  "gameType": 2,
+  "gameDate": "2024-01-15",
+  "startTimeUTC": "2024-01-15T18:00:00Z",
+  "gameState": "LIVE",
+  "gameScheduleState": "OK",
+  "periodDescriptor": {
+    "number": 2,
+    "periodType": "REG",
+    "maxRegulationPeriods": 3
+  },
+  "clock": {
+    "timeRemaining": "12:34",
+    "secondsRemaining": 754,
+    "running": true,
+    "inIntermission": false
+  },
+  "awayTeam": {
+    "id": 19,
+    "abbrev": "STL",
+    "score": 1,
+    "sog": 12
+  },
+  "homeTeam": {
+    "id": 24,
+    "abbrev": "ANA",
+    "score": 2,
+    "sog": 15
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "currentDate": "2024-01-15",
+  "prevDate": "2024-01-14",
+  "nextDate": "2024-01-16",
+  "gameWeek": [
+    {
+      "date": "2024-01-15",
+      "dayAbbrev": "MON",
+      "numberOfGames": 2,
+      "games": [
+        {
+          "id": 2024020001,
+          "season": 20232024,
+          "gameType": 2,
+          "gameDate": "2024-01-15",
+          "startTimeUTC": "2024-01-15T18:00:00Z",
+          "venueUTCOffset": "-05:00",
+          "venue": {"default": "Enterprise Center"},
+          "gameState": "FUT",
+          "gameScheduleState": "OK",
+          "awayTeam": {
+            "id": 19,
+            "abbrev": "STL",
+            "placeName": {"default": "St. Louis"},
+            "commonName": {"default": "Blues"},
+            "score": 0,
+            "odds": [{"providerId": 9, "value": "+125"}]
+          },
+          "homeTeam": {
+            "id": 24,
+            "abbrev": "ANA",
+            "placeName": {"default": "Anaheim"},
+            "commonName": {"default": "Ducks"},
+            "score": 0,
+            "odds": [{"providerId": 9, "value": "-145"}]
+          },
+          "tvBroadcasts": []
+        },
+        {
+          "id": 2024020002,
+          "season": 20232024,
+          "gameType": 2,
+          "gameDate": "2024-01-15",
+          "startTimeUTC": "2024-01-15T21:00:00Z",
+          "venueUTCOffset": "-08:00",
+          "venue": {"default": "Crypto.com Arena"},
+          "gameState": "LIVE",
+          "gameScheduleState": "OK",
+          "awayTeam": {
+            "id": 26,
+            "abbrev": "LAK",
+            "placeName": {"default": "Los Angeles"},
+            "commonName": {"default": "Kings"},
+            "score": 2,
+            "odds": [{"providerId": 9, "value": "-110"}]
+          },
+          "homeTeam": {
+            "id": 23,
+            "abbrev": "SJS",
+            "placeName": {"default": "San Jose"},
+            "commonName": {"default": "Sharks"},
+            "score": 1,
+            "odds": [{"providerId": 9, "value": "-110"}]
+          },
+          "tvBroadcasts": []
+        }
+      ]
+    }
+  ]
+}
