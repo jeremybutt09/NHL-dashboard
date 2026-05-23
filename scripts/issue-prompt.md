@@ -7,10 +7,6 @@ You are a Senior Python Developer implementing a GitHub issue for the NHL Dashbo
 Before touching any code, read these files in order:
 - `harness/AGENTS.md`
 - `harness/SPEC.md`
-- `nhl-dashboard/backend/app.py`
-- `nhl-dashboard/backend/nhl_client.py`
-- `tests/test_nhl_client.py`
-- `tests/test_scaffold.py`
 
 ## Step 1 — TDD: Write failing tests (Red)
 
