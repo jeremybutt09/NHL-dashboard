@@ -99,13 +99,12 @@ Run it locally:
 
 ```bash
 # Terminal 1 — backend
-cd nhl-dashboard/backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 flask --app app run --debug
 
 # Terminal 2 — frontend
-cd nhl-dashboard/frontend
+cd src/components/dashboard
 npm install
 npm run dev
 ```

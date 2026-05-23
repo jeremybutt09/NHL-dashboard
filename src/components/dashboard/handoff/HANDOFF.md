@@ -27,8 +27,8 @@ This document describes the **target architecture** for a from-scratch implement
 ## 2. Folder layout
 
 ```
-nhl-dashboard/
-├── backend/
+src/
+├── app/                        # Flask application
 │   ├── app.py                  # Flask app factory + route registration
 │   ├── config.py               # Env-driven config (DB URL, poll intervals)
 │   ├── models.py               # SQLAlchemy models
@@ -39,42 +39,36 @@ nhl-dashboard/
 │   │   ├── live.py             # Live score/period/clock for in-progress games
 │   │   └── implied.py          # Moneyline → implied probability + edge calc
 │   ├── scheduler.py            # APScheduler: poll jobs
-│   ├── routes/
-│   │   ├── games.py            # GET /api/games/today
-│   │   ├── game_detail.py      # GET /api/games/<id>
-│   │   └── health.py           # GET /api/health
-│   ├── requirements.txt
-│   └── instance/
-│       └── nhl.db              # SQLite file (gitignored)
-│
-├── frontend/
-│   ├── index.html
-│   ├── vite.config.js          # Proxy /api → http://localhost:5000
-│   ├── package.json
-│   ├── src/
-│   │   ├── main.jsx
-│   │   ├── App.jsx
-│   │   ├── styles/
-│   │   │   ├── tokens.css      # CSS vars (lifted from prototype)
-│   │   │   └── app.css         # Component styles (lifted from prototype)
-│   │   ├── hooks/
-│   │   │   └── usePolling.js   # Polls a URL on an interval, returns {data, error, loading}
-│   │   └── components/
-│   │       ├── Topbar.jsx
-│   │       ├── SlateTable.jsx
-│   │       ├── GameRow.jsx
-│   │       ├── MatchupCell.jsx
-│   │       ├── MoneylineCell.jsx
-│   │       ├── ImpliedBar.jsx
-│   │       ├── Sparkline.jsx
-│   │       ├── StatusCell.jsx
-│   │       ├── EdgeCell.jsx
-│   │       ├── TeamGlyph.jsx
-│   │       └── LiveDot.jsx
-│   └── public/
-│
-├── README.md
-└── .gitignore
+│   └── routes/
+│       ├── games.py            # GET /api/games/today
+│       ├── game_detail.py      # GET /api/games/<id>
+│       └── health.py           # GET /api/health
+└── components/
+    └── dashboard/
+        ├── index.html
+        ├── vite.config.js      # Proxy /api → http://localhost:5000
+        ├── package.json
+        ├── src/
+        │   ├── main.jsx
+        │   ├── App.jsx
+        │   ├── styles/
+        │   │   ├── tokens.css  # CSS vars (lifted from prototype)
+        │   │   └── app.css     # Component styles (lifted from prototype)
+        │   ├── hooks/
+        │   │   └── usePolling.js
+        │   └── components/
+        │       ├── Topbar.jsx
+        │       ├── SlateTable.jsx
+        │       ├── GameRow.jsx
+        │       ├── MatchupCell.jsx
+        │       ├── MoneylineCell.jsx
+        │       ├── ImpliedBar.jsx
+        │       ├── Sparkline.jsx
+        │       ├── StatusCell.jsx
+        │       ├── EdgeCell.jsx
+        │       ├── TeamGlyph.jsx
+        │       └── LiveDot.jsx
+        └── public/
 ```
 
 ---
