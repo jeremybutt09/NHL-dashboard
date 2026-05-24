@@ -53,6 +53,17 @@ def create_app(config_class=Config, test_config=None):
     app.register_blueprint(games_bp)
     app.register_blueprint(game_detail_bp)
 
+    # Global JSON error handlers — prevent Flask from returning HTML error pages
+    from flask import jsonify as _jsonify
+
+    @app.errorhandler(404)
+    def not_found(exc):
+        return _jsonify({'error': 'not_found', 'message': 'The requested resource was not found'}), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(exc):
+        return _jsonify({'error': 'internal_server_error', 'message': 'An unexpected error occurred'}), 500
+
     # CORS headers for Vite dev server
     @app.after_request
     def add_cors(response):
