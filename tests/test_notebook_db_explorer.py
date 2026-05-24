@@ -215,3 +215,50 @@ def test_notebook_connects_via_relative_path():
                 )
                 return
     raise AssertionError("No code cell connecting to nhl.db found in notebook")
+
+
+# ── Issue #110: pathlib-based DB_PATH ─────────────────────────────────────────
+
+def test_notebook_db_path_uses_pathlib():
+    """First code cell must import Path from pathlib and use it to derive DB_PATH.
+
+    A plain string literal like DB_PATH = "nhl-dashboard/..." fails when Jupyter's
+    cwd is the notebook directory rather than the repo root (Issue #110).
+    """
+    nb = _load_notebook()
+    code_cells = [c for c in nb.get("cells", []) if c.get("cell_type") == "code"]
+    assert code_cells, "No code cells found in notebook"
+    first_source = "".join(code_cells[0].get("source", []))
+    assert "pathlib" in first_source, (
+        "First code cell must import pathlib to derive DB_PATH (Issue #110)"
+    )
+    assert "Path" in first_source, (
+        "First code cell must use Path() to resolve DB_PATH (Issue #110)"
+    )
+
+
+def test_notebook_db_path_defined_only_in_first_code_cell():
+    """DB_PATH must be assigned exactly once, in the first code cell.
+
+    Repeating DB_PATH = '...' in every cell forces a repo-root launch dir (Issue #110).
+    Defining it once in Section 1 and referencing it in subsequent cells fixes this.
+    """
+    nb = _load_notebook()
+    code_cells = [c for c in nb.get("cells", []) if c.get("cell_type") == "code"]
+    definitions = []
+    for i, cell in enumerate(code_cells):
+        source = "".join(cell.get("source", []))
+        if "DB_PATH" in source and "=" in source:
+            # Count assignment lines (not just references like conn = sqlite3.connect(DB_PATH))
+            for line in source.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("DB_PATH") and "=" in stripped and "==" not in stripped:
+                    definitions.append(i)
+                    break
+    assert len(definitions) == 1, (
+        f"DB_PATH is assigned in {len(definitions)} code cell(s) (at cell indices {definitions}); "
+        "it must be assigned exactly once, in the first code cell only (Issue #110)"
+    )
+    assert definitions[0] == 0, (
+        f"DB_PATH assignment found in code cell index {definitions[0]}, expected cell index 0"
+    )
