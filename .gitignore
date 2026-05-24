@@ -66,6 +66,10 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# SQLite
+*.db
+nhl-dashboard/backend/instance/nhl.db
+
 # Scrapy stuff:
 .scrapy
 
@@ -151,6 +155,8 @@ activemq-data/
 
 # Environments
 .env
+.env.local
+.env.*.local
 .envrc
 .venv
 env/
@@ -218,6 +224,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / Frontend
+node_modules/
+nhl-dashboard/frontend/.vite/
+nhl-dashboard/frontend/coverage/
+
+# OS metadata
+.DS_Store
+Thumbs.db
 
 # Claude Code issue-processing state
 .claude-issues-progress
