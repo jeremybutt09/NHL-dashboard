@@ -64,8 +64,10 @@ def start_scheduler(app):
 
     _scheduler.start()
 
-    # Run the initial slate + odds fetch immediately
+    # Seed teams before the first slate refresh so FK lookups succeed immediately
     with app.app_context():
+        from services.seed import seed_teams
+        seed_teams()
         _poll_slate()
         _poll_odds()
         _compute_fair()
