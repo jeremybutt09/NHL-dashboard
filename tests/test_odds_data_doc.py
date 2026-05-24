@@ -17,15 +17,13 @@ def test_odds_data_doc_exists():
 
 
 def test_fixture_structure_documented():
-    """The 8-entry _SLATE_ODDS fixture structure must be documented with example JSON."""
+    """The _MOCK fixture structure must be documented with the actual return shape."""
     text = _doc_text()
-    assert "_SLATE_ODDS" in text or "SLATE_ODDS" in text, \
-        "_SLATE_ODDS fixture name not documented"
-    assert "game_id % " in text or "game_id %" in text or "modulo" in text, \
-        "Modulo cycling logic not documented"
-    assert '"ml"' in text or "'ml'" in text, "ml key not shown in example JSON"
-    assert '"implied"' in text or "'implied'" in text, \
-        "implied key not shown in example JSON"
+    assert "_MOCK" in text or "MOCK" in text.upper(), \
+        "_MOCK fixture name not documented"
+    assert "game_id" in text, "game_id not shown in return shape"
+    assert "away_ml" in text, "away_ml key not shown in fixture data structure"
+    assert "home_ml" in text, "home_ml key not shown in fixture data structure"
 
 
 def test_eight_fixture_sets_noted():
@@ -76,10 +74,10 @@ def test_to_replace_stub_section_present():
 
 
 def test_get_odds_interface_contract_documented():
-    """What get_odds(game_id) must return must be specified."""
+    """The fetch_odds(game_ids) interface contract must be documented."""
     text = _doc_text()
-    assert "get_odds" in text, "get_odds interface not documented"
-    assert "game_id" in text, "game_id parameter not documented"
+    assert "fetch_odds" in text, "fetch_odds interface not documented"
+    assert "game_ids" in text or "game_id" in text, "game_id parameter not documented"
 
 
 def test_files_to_edit_documented():

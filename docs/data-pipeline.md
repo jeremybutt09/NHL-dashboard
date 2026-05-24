@@ -8,20 +8,22 @@ This document describes all background jobs that drive data writes to the NHL Da
 
 ```
 NHL /v1/schedule/now
-  └──> build_slate()          ──> team (upsert), game (upsert)
+  └──> refresh_slate()        ──> team (upsert), game (upsert)
 
 NHL /v1/gamecenter/{id}/boxscore
-  └──> update_live_scores()   ──> game (update live fields only)
+  └──> refresh_live()         ──> game (update live fields only)
 
-odds_client.get_odds() [stub fixture]
-  └──> _poll_odds()           ──> odds_snapshot (insert-only / append)
+fetch_odds() [stub fixture]
+  └──> refresh_odds()
+         └──> _poll_odds()    ──> odds_snapshot (insert-only / append)
 
 odds_snapshot (latest per game)
   └──> _compute_fair()
          └──> devig_two_way() ──> model_fair (upsert)
 
 odds_snapshot
-  └──> prune_snapshots()      ──> DELETE rows WHERE fetched_at < now() − 7 days
+  └──> _prune_snapshots()
+         └──> prune_old_snapshots() ──> DELETE rows WHERE fetched_at < now() − 7 days
 ```
 
 Flask routes serve data from the database; no job bypasses the DB to return live API data directly.
@@ -30,15 +32,15 @@ Flask routes serve data from the database; no job bypasses the DB to return live
 
 ## Scheduler Overview
 
-All five jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler `BackgroundScheduler`. The scheduler is started in `create_app()` when `TESTING` is not set. Jobs run in threads that push a Flask application context before touching the database.
+All five jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler `BackgroundScheduler`. The scheduler is started via `start_scheduler(app)`, which is called from `create_app()` when `TESTING` is not set. Jobs run in threads that push a Flask application context before touching the database.
 
 | Job ID | Trigger Interval | Function Called | Tables Written | Update Strategy |
 |---|---|---|---|---|
-| `poll_slate` | Every 5 minutes | `build_slate()` | `team`, `game` | Upsert (merge) |
-| `poll_live` | Every 15 seconds | `update_live_scores()` | `game` | Update live fields only |
-| `poll_odds` | Every 5 minutes | `_poll_odds()` (inline) | `odds_snapshot` | Insert-only (append) |
+| `poll_slate` | Every 5 minutes | `refresh_slate()` in `services/slate.py` | `team`, `game` | Upsert (`db.session.get()` + `add()`) |
+| `poll_live` | Every 15 seconds | `refresh_live()` in `services/live.py` | `game` | Update live fields only |
+| `poll_odds` | Every 5 minutes | `_poll_odds()` → `refresh_odds()` | `odds_snapshot` | Insert-only (append) |
 | `compute_fair` | Every 5 minutes | `_compute_fair()` (inline) | `model_fair` | Upsert |
-| `prune_snapshots` | Every 1 hour | `prune_snapshots()` | `odds_snapshot` | Delete (age-based purge) |
+| `prune` | Every 1 hour | `_prune_snapshots()` → `prune_old_snapshots()` | `odds_snapshot` | Delete (age-based purge) |
 
 ---
 
@@ -46,21 +48,21 @@ All five jobs are registered in `nhl-dashboard/backend/scheduler.py` via APSched
 
 ### `poll_slate` — Every 5 Minutes
 
-**Source:** `nhl-dashboard/backend/scheduler.py` → `build_slate()` in `services/slate.py`
+**Source:** `nhl-dashboard/backend/scheduler.py` → `refresh_slate()` in `services/slate.py`
 
-**What it does:** Calls `GET /v1/schedule/now` on the NHL API, parses today's game list, and writes every team and game to the database. Uses `db.session.merge()` (SQLAlchemy's upsert-by-primary-key), so re-running the job never creates duplicate rows — it updates in place.
+**What it does:** Calls `GET /v1/schedule/now` on the NHL API, parses today's game list, and writes every team and game to the database. Uses `db.session.get()` to look up each row by primary key, then `db.session.add()` for new rows — equivalent to an upsert. Re-running the job never creates duplicate rows; it updates in place.
 
 **Tables read:** none  
 **Tables written:** `team` (upsert by `code`), `game` (upsert by `id`)  
-**Update strategy:** Upsert (merge) — safe to run repeatedly
+**Update strategy:** Upsert (`db.session.get()` + `db.session.add()`) — safe to run repeatedly
 
-**Staleness signal:** If `game.updated_at` is more than ~6 minutes old, this job has likely stalled or the NHL API returned an error. Check `scheduler.get_last_poll()` — it returns the UTC timestamp of the last successful run.
+**Staleness signal:** If `game.updated_at` is more than ~6 minutes old, this job has likely stalled or the NHL API returned an error.
 
 ---
 
 ### `poll_live` — Every 15 Seconds
 
-**Source:** `nhl-dashboard/backend/scheduler.py` → `update_live_scores()` in `services/live.py`
+**Source:** `nhl-dashboard/backend/scheduler.py` → `refresh_live()` in `services/live.py`
 
 **What it does:** Queries the database for games where `status = 'live'`, then calls `GET /v1/gamecenter/{id}/boxscore` for each. Writes `period`, `clock`, `away_score`, `home_score`, `away_sog`, `home_sog`, and `updated_at` back to the `game` row. No-ops if no games are live.
 
@@ -74,15 +76,15 @@ All five jobs are registered in `nhl-dashboard/backend/scheduler.py` via APSched
 
 ### `poll_odds` — Every 5 Minutes
 
-**Source:** `nhl-dashboard/backend/scheduler.py` → `_poll_odds()` (defined inline)
+**Source:** `nhl-dashboard/backend/scheduler.py` → `_poll_odds()` (delegates to `refresh_odds()` in `services/slate.py`)
 
-**What it does:** For each game in the database, calls `odds_client.get_odds(game.id)` and inserts a new `OddsSnapshot` row with the current moneyline odds, implied probabilities, and a `fetched_at` timestamp. This is an **append-only** job — it never modifies existing rows, which preserves the full odds history for each game.
+**What it does:** `_poll_odds()` calls `refresh_odds()`, which calls `fetch_odds(game_ids)` from `odds_client.py` to retrieve mock odds for the demo game IDs. A new `OddsSnapshot` row is inserted for each result with the current moneyline odds and a `fetched_at` timestamp. This is an **append-only** job — it never modifies existing rows, which preserves the full odds history for each game.
 
-**Tables read:** `game` (to get the list of game IDs)  
+**Tables read:** none (uses hardcoded demo IDs from `odds_client._MOCK`)  
 **Tables written:** `odds_snapshot` (insert only)  
 **Update strategy:** Insert-only / append
 
-> **Stub state:** `odds_client.get_odds()` is currently a fixture that returns synthetic data. See `docs/odds-and-fair-value.md` for the real-API upgrade path.
+> **Stub state:** `odds_client.fetch_odds()` returns data from the `_MOCK` dict (deterministic fixture). See `docs/odds-data.md` for the real-API upgrade path.
 
 ---
 
@@ -124,7 +126,9 @@ The resulting `away_fair` and `home_fair` values (stored in `model_fair`) sum to
 
 ### `prune_snapshots` — Every 1 Hour
 
-**Source:** `nhl-dashboard/backend/scheduler.py` → `prune_snapshots()` (top-level function)
+**Source:** `nhl-dashboard/backend/scheduler.py` → `_prune_snapshots()` wrapper → `prune_old_snapshots()` in `services/slate.py`
+
+**APScheduler job ID:** `prune`
 
 **What it does:** Deletes all `OddsSnapshot` rows where `fetched_at` is older than 7 days. This prevents unbounded table growth while retaining enough history for short-term odds-movement analysis.
 
@@ -148,9 +152,9 @@ Not all jobs are equally necessary for local development. The table below indica
 | `compute_fair` | Yes | Skips gracefully when no snapshots exist |
 | `prune_snapshots` | Yes | No functional impact during short dev sessions |
 
-To disable a job during development, comment out the corresponding `_scheduler.add_job(...)` call in `scheduler.py:init_scheduler()`. The scheduler itself must still start for the remaining jobs to run.
+To disable a job during development, comment out the corresponding `_scheduler.add_job(...)` call in `scheduler.py:start_scheduler()`. The scheduler itself must still start for the remaining jobs to run.
 
-Alternatively, set `TESTING = True` in the app config — this skips `init_scheduler()` entirely and no background jobs run.
+Alternatively, set `TESTING = True` in the app config — this skips `start_scheduler()` entirely and no background jobs run.
 
 ---
 
@@ -158,9 +162,9 @@ Alternatively, set `TESTING = True` in the app config — this skips `init_sched
 
 | File | Role |
 |---|---|
-| `nhl-dashboard/backend/scheduler.py` | All job definitions and registration |
-| `nhl-dashboard/backend/services/slate.py` | `build_slate()` — schedule fetch and upsert |
-| `nhl-dashboard/backend/services/live.py` | `update_live_scores()` — boxscore fetch and update |
+| `nhl-dashboard/backend/scheduler.py` | All job definitions and registration; `start_scheduler(app)` entry point |
+| `nhl-dashboard/backend/services/slate.py` | `refresh_slate()` — schedule fetch and upsert; `refresh_odds()` — odds snapshot insert; `prune_old_snapshots()` — age purge |
+| `nhl-dashboard/backend/services/live.py` | `refresh_live()` — boxscore fetch and update |
 | `nhl-dashboard/backend/services/implied.py` | `devig_two_way()`, `american_to_implied()`, `edge()` |
-| `nhl-dashboard/backend/odds_client.py` | `get_odds()` — currently a stub fixture |
+| `nhl-dashboard/backend/odds_client.py` | `fetch_odds(game_ids)` — currently a stub fixture |
 | `nhl-dashboard/backend/models.py` | SQLAlchemy models for all four tables |

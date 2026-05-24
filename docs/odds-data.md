@@ -2,7 +2,7 @@
 
 ## Current State: Stub Fixture
 
-Live odds data is not yet sourced from a real provider. Instead, `nhl-dashboard/backend/odds_client.py` contains a deterministic fixture — `_SLATE_ODDS` — with 8 hardcoded odds sets. The correct set is selected via `game_id % 8`, so every call is deterministic and different game IDs produce visually distinct rows.
+Live odds data is not yet sourced from a real provider. Instead, `nhl-dashboard/backend/odds_client.py` contains a deterministic fixture — `_MOCK` — a Python dict of 8 hardcoded odds entries keyed by game ID (1001–1008). The correct entry is selected by direct dict lookup on game ID, so every call is deterministic.
 
 ### Why a stub?
 
@@ -10,23 +10,37 @@ The devig math in `services/implied.py` is production-quality. The stub lets the
 
 ---
 
-## Fixture Structure
+## `fetch_odds()` Interface
 
-`get_odds(game_id)` returns one entry from `_SLATE_ODDS`, selected by `game_id % len(_SLATE_ODDS)`:
+**File:** `nhl-dashboard/backend/odds_client.py`
+
+**Function:** `fetch_odds(game_ids: list[int]) -> list[dict]`
+
+Takes a list of game IDs and returns a list of odds dicts — one per game ID found in `_MOCK`. IDs not present in `_MOCK` are silently skipped.
+
+### Return shape
+
+Each dict in the returned list has this shape:
 
 ```python
-# odds_client.py — get_odds() return shape
+# odds_client.py — fetch_odds() return shape (one entry per game)
 {
-    "ml":          {"away": 120,   "home": -140},   # current American moneyline
-    "ml_open":     {"away": 115,   "home": -135},   # opening line
-    "implied":     {"away": 45.0,  "home": 55.0},   # raw implied probabilities (%)
-    "fair":        {"away": 47.5,  "home": 52.5},   # devigged fair value (%)
-    "edge":        2.1,                              # fair − market (pp)
-    "movement_24h": [46.38, 44.95, ..., 45.0],      # 24-point sparkline array
+    'game_id':       int,   # e.g. 1001
+    'book':          str,   # always 'consensus' in stub
+    'away_ml':       int,   # current American moneyline (e.g. 120 for +120)
+    'home_ml':       int,   # current American moneyline (e.g. -140)
+    'away_ml_open':  int,   # opening line
+    'home_ml_open':  int,   # opening line
 }
 ```
 
-There are **8** hardcoded sets, each with distinct odds ranges (heavy favourites, coin-flip games, etc.) to give the UI variety during development.
+There are **8** hardcoded entries (game IDs 1001–1008), each with distinct odds ranges
+(heavy favourites, coin-flip games, etc.) to give the UI variety during development.
+
+> **No `implied`, `fair`, `edge`, or `movement_24h` keys are returned.** Implied
+> probabilities are computed locally from the moneyline values by calling
+> `american_to_implied()` inside `refresh_odds()` before inserting into `odds_snapshot`.
+> Fair-value and edge are derived from the DB by the `compute_fair` scheduler job.
 
 ---
 
@@ -70,7 +84,7 @@ Every time `_poll_odds` runs (every 5 minutes), it inserts a **new row** into `o
 - **24-hour sparklines** showing how the line has moved throughout the day
 - **Trend views** identifying sharp line movement before game time
 
-Rows older than 7 days are purged by the `prune_snapshots` job (runs hourly) to keep the table size bounded.
+Rows older than 7 days are purged by the `prune` job (runs hourly) to keep the table size bounded.
 
 ### OddsSnapshot columns
 
@@ -82,8 +96,8 @@ Rows older than 7 days are purged by the `prune_snapshots` job (runs hourly) to 
 | `book` | String(32) | Odds source — **hardcoded to `'consensus'`** (see limitation below) |
 | `away_ml` | Integer | Away American moneyline |
 | `home_ml` | Integer | Home American moneyline |
-| `away_implied` | Float | Away raw implied probability (%) |
-| `home_implied` | Float | Home raw implied probability (%) |
+| `away_implied` | Float | Away raw implied probability (computed from `away_ml`) |
+| `home_implied` | Float | Home raw implied probability (computed from `home_ml`) |
 
 ### ModelFair columns
 
@@ -98,7 +112,7 @@ Rows older than 7 days are purged by the `prune_snapshots` job (runs hourly) to 
 
 ## Current Limitation: `book` Column Hardcoded to `'consensus'`
 
-The `book` column in `OddsSnapshot` is always written as `'consensus'` (see `scheduler.py::_poll_odds`). This means:
+The `book` column in `OddsSnapshot` is always written as `'consensus'` (see `scheduler.py::_poll_odds` → `refresh_odds()`). This means:
 
 - All snapshots are treated as a single market view
 - There is no per-book breakdown (DraftKings, FanDuel, BetMGM, etc.)
@@ -112,25 +126,32 @@ This is fine for the MVP stub but will need addressing when a real odds source i
 
 When you are ready to swap in a real odds provider, make the following changes:
 
-### 1. Interface contract — what `get_odds(game_id)` must return
+### 1. Interface contract — what `fetch_odds(game_ids)` must return
 
-The rest of the pipeline depends on this exact shape. Any real implementation **must** return a dict with these keys:
+The rest of the pipeline depends on this exact shape. Any real implementation **must** return a list of dicts, one per game, with at minimum:
 
 ```python
-{
-    "ml":      {"away": int,   "home": int},    # current American moneyline
-    "implied": {"away": float, "home": float},  # raw implied probabilities (%)
-}
+[
+    {
+        "game_id": int,          # the game ID passed in
+        "book":    str,          # sportsbook identifier
+        "away_ml": int,          # current American moneyline
+        "home_ml": int,          # current American moneyline
+    },
+    ...
+]
 ```
 
-The keys `ml_open`, `fair`, `edge`, and `movement_24h` are optional; the scheduler only reads `ml` and `implied`. If your provider exposes those extras you may include them, but they are not required.
+The keys `away_ml_open` and `home_ml_open` are optional; the scheduler only reads
+`away_ml` and `home_ml` to compute implied probabilities. Include them if your
+provider exposes them.
 
 ### 2. Files to edit
 
 | File | Change |
 |------|--------|
-| `nhl-dashboard/backend/odds_client.py` | Replace `_SLATE_ODDS` fixture and the `get_odds()` function body with a real HTTP call to your odds provider. Keep the function signature `get_odds(game_id: int) -> dict` unchanged. |
-| `nhl-dashboard/backend/scheduler.py` | No changes needed — `_poll_odds` already calls `get_odds(game.id)` and stores the result. |
+| `nhl-dashboard/backend/odds_client.py` | Replace `_MOCK` dict and the `fetch_odds()` function body with a real HTTP call to your odds provider. Keep the function signature `fetch_odds(game_ids: list[int]) -> list[dict]` unchanged. |
+| `nhl-dashboard/backend/scheduler.py` | No changes needed — `_poll_odds()` already delegates to `refresh_odds()` in `services/slate.py`, which calls `fetch_odds()`. |
 
 ### 3. New columns for multi-book support
 

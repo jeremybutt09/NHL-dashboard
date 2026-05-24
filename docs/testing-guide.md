@@ -69,13 +69,13 @@ Tests run in a `jsdom` browser-like environment (configured in `vitest.config.js
 ### Backend coverage
 
 ```bash
-pytest --cov=nhl_dashboard
+pytest --cov=nhl-dashboard/backend
 ```
 
 To generate an HTML report:
 
 ```bash
-pytest --cov=nhl_dashboard --cov-report=html
+pytest --cov=nhl-dashboard/backend --cov-report=html
 open htmlcov/index.html
 ```
 
@@ -109,12 +109,12 @@ Backend test fixtures are defined in `nhl-dashboard/tests/conftest.py`. They pro
 def test_game_status_live(client, team_factory, game_factory):
     team_factory("TOR", "Toronto Maple Leafs")
     team_factory("BOS", "Boston Bruins")
-    game = game_factory("BOS", "TOR", status="LIVE", away_score=1, home_score=2)
+    game = game_factory("BOS", "TOR", status="live", away_score=1, home_score=2)
 
     response = client.get("/api/games/today")
     assert response.status_code == 200
     data = response.get_json()
-    assert any(g["status"] == "LIVE" for g in data["games"])
+    assert any(g["status"] == "live" for g in data["games"])
 ```
 
 Factories return the committed model instance, so you can pass `game.id` to `odds_snapshot_factory` or `model_fair_factory` for relational tests.

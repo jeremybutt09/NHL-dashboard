@@ -52,10 +52,13 @@ def test_live_update_fields_present():
 
 
 def test_transformations_documented():
-    """Transformation functions must be called out in the doc."""
+    """Status and period mapping logic locations must be documented."""
     text = _doc_text()
-    assert "_map_game_state" in text, "_map_game_state() transform not documented"
-    assert "_map_period" in text, "_map_period() transform not documented"
+    # Status mapping is inline in refresh_slate() and _update_from_boxscore() — no named helper
+    assert "refresh_slate" in text or "slate.py" in text, \
+        "Status-mapping location (refresh_slate/slate.py) not documented"
+    assert "_update_from_boxscore" in text or "live.py" in text, \
+        "Period-mapping location (_update_from_boxscore/live.py) not documented"
 
 
 def test_odds_client_stub_documented():
