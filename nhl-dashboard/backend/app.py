@@ -1,10 +1,26 @@
+import logging
 import os
 from flask import Flask
 from extensions import db
 from config import Config
 
 
+def _configure_logging():
+    """Set root logger level from FLASK_LOG_LEVEL and add a StreamHandler if none exist."""
+    level_name = os.environ.get("FLASK_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    root = logging.getLogger()
+    root.setLevel(level)
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
+        root.addHandler(handler)
+
+
 def create_app(config_class=Config, test_config=None):
+    _configure_logging()
     """Create and configure the Flask application.
 
     Args:
