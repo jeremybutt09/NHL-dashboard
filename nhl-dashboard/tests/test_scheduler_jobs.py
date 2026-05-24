@@ -213,10 +213,10 @@ class TestComputeFair:
         mf = db.session.get(ModelFair, game.id)
         assert mf is not None
 
-    def test_compute_all_fair_probabilities_sum_to_one(
+    def test_compute_all_fair_probabilities_sum_to_one_hundred(
         self, db, team_factory, game_factory, odds_snapshot_factory
     ):
-        """ModelFair home_fair + away_fair == 1.0 after compute_all_fair()."""
+        """ModelFair home_fair + away_fair == 100.0 after compute_all_fair()."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
@@ -226,7 +226,7 @@ class TestComputeFair:
         compute_all_fair()
 
         mf = db.session.get(ModelFair, game.id)
-        assert mf.home_fair + mf.away_fair == pytest.approx(1.0, abs=1e-9)
+        assert mf.home_fair + mf.away_fair == pytest.approx(100.0, abs=0.01)
 
     def test_compute_all_fair_idempotent_single_row_per_game(
         self, db, team_factory, game_factory, odds_snapshot_factory

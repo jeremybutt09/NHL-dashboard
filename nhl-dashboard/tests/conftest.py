@@ -138,13 +138,13 @@ def model_fair_factory(db):
 
     Args:
         game_id: FK to Game.id.
-        home_fair: Home win probability (0–1), defaults to ``0.55``.
-        away_fair: Away win probability (0–1), defaults to ``0.45``.
+        home_fair: Home win probability in percentage points (0–100), defaults to ``55.0``.
+        away_fair: Away win probability in percentage points (0–100), defaults to ``45.0``.
 
     Returns:
         The committed ModelFair instance.
     """
-    def make(game_id, home_fair=0.55, away_fair=0.45):
+    def make(game_id, home_fair=55.0, away_fair=45.0):
         fair = ModelFair(
             game_id=game_id,
             home_fair=home_fair,

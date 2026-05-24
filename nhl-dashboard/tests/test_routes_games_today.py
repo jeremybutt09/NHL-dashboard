@@ -18,7 +18,7 @@ class TestGamesTodayPopulated:
             status='live', away_score=2, home_score=1, period='2', clock='10:00',
         )
         odds_snapshot_factory(self.game.id, away_ml=-110, home_ml=100)
-        model_fair_factory(self.game.id, home_fair=0.55, away_fair=0.45)
+        model_fair_factory(self.game.id, home_fair=55.0, away_fair=45.0)
 
     def test_games_today_returns_200(self, client):
         assert client.get('/api/games/today').status_code == 200
@@ -63,10 +63,10 @@ class TestGamesTodayPopulated:
         assert isinstance(game['fair']['away'], float)
         assert isinstance(game['fair']['home'], float)
 
-    def test_games_today_fair_probs_sum_to_one(self, client):
+    def test_games_today_fair_probs_sum_to_one_hundred(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
         total = game['fair']['away'] + game['fair']['home']
-        assert total == pytest.approx(1.0, abs=1e-6)
+        assert total == pytest.approx(100.0, abs=0.01)
 
     def test_games_today_edge_is_signed_float(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]

@@ -48,12 +48,14 @@ There are **8** hardcoded entries (game IDs 1001–1008), each with distinct odd
 
 **File:** `nhl-dashboard/backend/services/implied.py`
 
+**Scale:** Returns **percentage points (0–100)**. `american_to_implied(-110)` → `52.38`, not `0.5238`.
+
 American moneyline odds carry an embedded probability. The formula differs by sign:
 
 | Sign | Formula | Example |
 |------|---------|---------|
-| Positive (`+120`) | `100 / (odds + 100) × 100` | `100 / 220 × 100 = 45.45%` |
-| Negative (`-140`) | `abs(odds) / (abs(odds) + 100) × 100` | `140 / 240 × 100 = 58.33%` |
+| Positive (`+120`) | `100 / (odds + 100) × 100` | `100 / 220 × 100 = 45.45` |
+| Negative (`-140`) | `abs(odds) / (abs(odds) + 100) × 100` | `140 / 240 × 100 = 58.33` |
 
 Because a sportsbook charges vig, the away and home probabilities from a real line will sum to **more than 100** (e.g., 103–106%). `american_to_implied` only converts; it does not remove the vig.
 
@@ -62,6 +64,8 @@ Because a sportsbook charges vig, the away and home probabilities from a real li
 ## Math: devig_two_way()
 
 **File:** `nhl-dashboard/backend/services/implied.py`
+
+**Scale:** Accepts and returns **percentage points (0–100)**. Output always sums to exactly 100.0.
 
 The vig inflates the sum of implied probabilities. `devig_two_way` normalises both sides so they sum to exactly 100, giving the book's "true" estimate of each outcome.
 
@@ -96,16 +100,16 @@ Rows older than 7 days are purged by the `prune` job (runs hourly) to keep the t
 | `book` | String(32) | Odds source — **hardcoded to `'consensus'`** (see limitation below) |
 | `away_ml` | Integer | Away American moneyline |
 | `home_ml` | Integer | Home American moneyline |
-| `away_implied` | Float | Away raw implied probability (computed from `away_ml`) |
-| `home_implied` | Float | Home raw implied probability (computed from `home_ml`) |
+| `away_implied` | Float | Away raw implied probability in percentage points (0–100), computed from `away_ml` via `american_to_implied()` |
+| `home_implied` | Float | Home raw implied probability in percentage points (0–100), computed from `home_ml` via `american_to_implied()` |
 
 ### ModelFair columns
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `game_id` | Integer PK FK → `game.id` | One row per game (upserted) |
-| `away_fair` | Float | Away devigged fair probability (%) |
-| `home_fair` | Float | Home devigged fair probability (%) |
+| `away_fair` | Float | Away devigged fair probability in percentage points (0–100) |
+| `home_fair` | Float | Home devigged fair probability in percentage points (0–100) |
 | `computed_at` | DateTime | UTC timestamp of last computation |
 
 ---

@@ -121,12 +121,12 @@ class TestModelFairModel:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
-        model_fair_factory(game_id=game.id, home_fair=0.55, away_fair=0.45)
+        model_fair_factory(game_id=game.id, home_fair=55.0, away_fair=45.0)
 
         updated = ModelFair(
             game_id=game.id,
-            home_fair=0.60,
-            away_fair=0.40,
+            home_fair=60.0,
+            away_fair=40.0,
             computed_at=datetime.now(timezone.utc),
         )
         db.session.merge(updated)
@@ -134,8 +134,8 @@ class TestModelFairModel:
 
         rows = ModelFair.query.filter_by(game_id=game.id).all()
         assert len(rows) == 1
-        assert rows[0].home_fair == pytest.approx(0.60)
-        assert rows[0].away_fair == pytest.approx(0.40)
+        assert rows[0].home_fair == pytest.approx(60.0)
+        assert rows[0].away_fair == pytest.approx(40.0)
 
     def test_model_fair_fk_requires_valid_game(self, db):
         """ModelFair with a nonexistent game_id raises IntegrityError when FKs are enforced."""
@@ -143,8 +143,8 @@ class TestModelFairModel:
 
         db.session.add(ModelFair(
             game_id=9999,
-            home_fair=0.55,
-            away_fair=0.45,
+            home_fair=55.0,
+            away_fair=45.0,
             computed_at=datetime.now(timezone.utc),
         ))
         with pytest.raises(IntegrityError):

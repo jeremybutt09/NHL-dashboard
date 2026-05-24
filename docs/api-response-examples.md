@@ -157,8 +157,8 @@ A completed game has `"status": "final"` and a `null` `live` block.
 | `live` | `object \| null` | Populated for `status == "live"`; `null` otherwise. See Live block below. |
 | `ml` | `object \| null` | Current moneyline odds. `null` when no odds snapshot is available. |
 | `ml_open` | `object \| null` | Opening moneyline odds (oldest OddsSnapshot for this game). `null` when unavailable. |
-| `implied` | `object` | Vig-adjusted implied win probabilities derived from `ml`. Always present; defaults to `{away: 50.0, home: 50.0}` when `ml` is `null`. |
-| `fair` | `object` | Model fair-value win probabilities. Falls back to `implied` when no `ModelFair` row exists. |
+| `implied` | `object` | Vig-adjusted implied win probabilities in percentage points (0–100), derived from `ml`. Always present; defaults to `{away: 50.0, home: 50.0}` when `ml` is `null`. |
+| `fair` | `object` | Model fair-value win probabilities in percentage points (0–100). Falls back to `implied` when no `ModelFair` row exists. |
 | `edge` | `float \| null` | Away team edge in percentage points: `fair.away − implied.away`. Positive = away team is undervalued. `null` when `ml` is absent. |
 | `movement_24h` | `array` | Ordered list of `away_implied` floats from OddsSnapshot rows — see Sparkline section. |
 

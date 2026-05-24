@@ -46,8 +46,8 @@ class OddsSnapshot(db.Model):
     book        = db.Column(db.String(32), nullable=False)   # 'consensus' for v1
     away_ml     = db.Column(db.Integer)      # American odds, e.g. +120
     home_ml     = db.Column(db.Integer)
-    away_implied = db.Column(db.Float)       # 0-100
-    home_implied = db.Column(db.Float)
+    away_implied = db.Column(db.Float)       # percentage points (0–100)
+    home_implied = db.Column(db.Float)       # percentage points (0–100)
 
 
 class ModelFair(db.Model):
@@ -55,6 +55,6 @@ class ModelFair(db.Model):
     __tablename__ = 'model_fair'
 
     game_id     = db.Column(db.Integer, db.ForeignKey('game.id'), primary_key=True)
-    away_fair   = db.Column(db.Float)   # 0-100
-    home_fair   = db.Column(db.Float)
+    away_fair   = db.Column(db.Float)   # percentage points (0–100)
+    home_fair   = db.Column(db.Float)   # percentage points (0–100)
     computed_at = db.Column(db.DateTime)

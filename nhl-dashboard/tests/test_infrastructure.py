@@ -54,13 +54,13 @@ def test_odds_snapshot_factory_creates_row(
 def test_model_fair_factory_creates_row(
     model_fair_factory, game_factory, team_factory, db
 ):
-    """model_fair_factory creates a ModelFair row with home_fair=0.55, away_fair=0.45."""
+    """model_fair_factory creates a ModelFair row with home_fair=55.0, away_fair=45.0."""
     team_factory(code="TOR", name="Toronto Maple Leafs")
     team_factory(code="BOS", name="Boston Bruins")
     game = game_factory(away_code="TOR", home_code="BOS")
     fair = model_fair_factory(game_id=game.id)
-    assert fair.home_fair == pytest.approx(0.55)
-    assert fair.away_fair == pytest.approx(0.45)
+    assert fair.home_fair == pytest.approx(55.0)
+    assert fair.away_fair == pytest.approx(45.0)
 
 
 def test_client_get_health_returns_response(client):

@@ -104,9 +104,11 @@ The raw implied probabilities stored in `odds_snapshot` (e.g. `away_implied = 52
 
 **Step 1 — Convert American odds to implied probability** (`american_to_implied` in `services/implied.py`):
 
+Returns **percentage points (0–100)**. e.g. `-110` → `52.38`, not `0.5238`.
+
 ```
-Favorite (negative odds, e.g. -140):  implied = |odds| / (|odds| + 100) × 100
-Underdog (positive odds, e.g. +120):  implied = 100 / (odds + 100) × 100
+Favorite (negative odds, e.g. -140):  implied = |odds| / (|odds| + 100) × 100  →  e.g. 58.33
+Underdog (positive odds, e.g. +120):  implied = 100 / (odds + 100) × 100        →  e.g. 45.45
 ```
 
 **Step 2 — Normalize via `devig_two_way`** (`services/implied.py`):
