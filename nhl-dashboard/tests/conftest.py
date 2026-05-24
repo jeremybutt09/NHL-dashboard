@@ -66,7 +66,7 @@ def game_factory(db):
     Args:
         away_code: FK to Team.code for the away team.
         home_code: FK to Team.code for the home team.
-        status: Game state string, defaults to ``"LIVE"``.
+        status: Game state string, defaults to ``"live"``.
         away_score: Away team score, defaults to ``2``.
         home_score: Home team score, defaults to ``1``.
         period: Current period string, defaults to ``"2"``.
@@ -78,7 +78,7 @@ def game_factory(db):
     def make(
         away_code,
         home_code,
-        status="LIVE",
+        status="live",
         away_score=2,
         home_score=1,
         period="2",

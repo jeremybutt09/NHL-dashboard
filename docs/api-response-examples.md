@@ -249,8 +249,8 @@ HTML.
 
 ```json
 {
-  "error": "not found",
-  "status": 404
+  "error": "not_found",
+  "message": "The requested resource was not found"
 }
 ```
 
@@ -258,12 +258,12 @@ HTML.
 
 ```json
 {
-  "error": "internal server error",
-  "status": 500
+  "error": "internal_server_error",
+  "message": "An unexpected error occurred"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `error` | `string` | Human-readable error message. |
-| `status` | `integer` | Mirrors the HTTP status code. |
+| `error` | `string` | Machine-readable error code (`not_found`, `internal_server_error`, `bad_request`). |
+| `message` | `string` | Human-readable description of the error. |
