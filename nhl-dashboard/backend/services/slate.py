@@ -1,11 +1,14 @@
 """
 Slate service: build today's game list, upsert from NHL API, return API response.
 """
+import logging
 from datetime import datetime, timezone
 
 from extensions import db
 from models import Game, OddsSnapshot, ModelFair
 from services.implied import american_to_implied, devig_two_way, edge as calc_edge
+
+logger = logging.getLogger(__name__)
 
 
 # NHL schedule API odds provider IDs that give American moneyline format
@@ -36,9 +39,47 @@ def _parse_american_odds(team_obj: dict) -> int | None:
     return None
 
 
+def _ensure_team(tri_code: str, score_now_obj: dict, all_teams: list) -> None:
+    """Ensure a Team row exists, auto-inserting from stats API data if missing.
+
+    Args:
+        tri_code: Three-letter team abbreviation (primary key).
+        score_now_obj: Team dict from the schedule/score API response.
+        all_teams: Pre-fetched list from get_all_teams(); may be empty on API failure.
+    """
+    from models import Team
+
+    if db.session.get(Team, tri_code) is not None:
+        return
+
+    stats_match = next((t for t in all_teams if t.get('triCode') == tri_code), None)
+
+    if stats_match:
+        logger.warning("[slate] Auto-appended unknown team: %s", tri_code)
+        team = Team(
+            tri_code=tri_code,
+            name=stats_match.get('fullName', tri_code),
+            team_id=stats_match.get('id'),
+            franchise_id=stats_match.get('franchiseId'),
+            full_name=stats_match.get('fullName'),
+            league_id=stats_match.get('leagueId'),
+            raw_tricode=stats_match.get('rawTricode'),
+        )
+    else:
+        logger.warning("[slate] Auto-appended unrecognised team (no stats API match): %s", tri_code)
+        name = _team_name(score_now_obj)
+        team = Team(
+            tri_code=tri_code,
+            name=name,
+            full_name=name or None,
+        )
+
+    db.session.add(team)
+
+
 def refresh_slate():
     """Pull today's schedule from NHL API and upsert Game rows."""
-    from nhl_client import get_schedule_now
+    from nhl_client import get_schedule_now, get_all_teams
     from models import Team
 
     try:
@@ -46,6 +87,15 @@ def refresh_slate():
     except Exception as e:
         print(f'[slate] NHL API error: {e}')
         return
+
+    # Fetch full team list once; used by _ensure_team for auto-append fallback.
+    try:
+        all_teams = get_all_teams()
+    except Exception as e:
+        logger.error(
+            "[slate] Could not fetch teams for auto-append; unknown teams will get minimal rows: %s", e
+        )
+        all_teams = []
 
     game_weeks = data.get('gameWeek', [])
     if not game_weeks:
@@ -72,14 +122,12 @@ def refresh_slate():
         away_abbrev = away_obj.get('abbrev', '???')
         home_abbrev = home_obj.get('abbrev', '???')
 
-        # Upsert teams
+        # Ensure teams exist, auto-appending via stats API if missing
         for abbrev, obj in [(away_abbrev, away_obj), (home_abbrev, home_obj)]:
+            _ensure_team(abbrev, obj, all_teams)
+            # Backfill name for legacy rows that stored the code as the name
             team = db.session.get(Team, abbrev)
-            if team is None:
-                team = Team(tri_code=abbrev, name=_team_name(obj))
-                db.session.add(team)
-            elif team.name == abbrev:
-                # Backfill name if it was stored as the code
+            if team is not None and team.name == abbrev:
                 team.name = _team_name(obj)
 
         # Parse start time
