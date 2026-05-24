@@ -76,7 +76,7 @@ def refresh_slate():
         for abbrev, obj in [(away_abbrev, away_obj), (home_abbrev, home_obj)]:
             team = db.session.get(Team, abbrev)
             if team is None:
-                team = Team(code=abbrev, name=_team_name(obj))
+                team = Team(tri_code=abbrev, name=_team_name(obj))
                 db.session.add(team)
             elif team.name == abbrev:
                 # Backfill name if it was stored as the code

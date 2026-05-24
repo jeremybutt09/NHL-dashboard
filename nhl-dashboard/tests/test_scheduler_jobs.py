@@ -42,7 +42,7 @@ class TestPollSlate:
             from services.slate import refresh_slate
             refresh_slate()
 
-        team_codes = {t.code for t in db.session.scalars(select(Team)).all()}
+        team_codes = {t.tri_code for t in db.session.scalars(select(Team)).all()}
         assert {"STL", "ANA", "LAK", "SJS"}.issubset(team_codes)
 
     def test_refresh_slate_idempotent_no_duplicate_game_rows(self, db):

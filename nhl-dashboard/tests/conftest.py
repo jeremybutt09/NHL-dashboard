@@ -1,9 +1,13 @@
 """Shared pytest fixtures for the nhl-dashboard backend test suite (Issue #87)."""
 import sys
 import os
+import itertools
 from datetime import datetime, timezone
 
 import pytest
+
+# Unused — kept for potential future use if team_id becomes NOT NULL.
+_team_id_seq = itertools.count(1)
 
 # Make nhl-dashboard/backend importable without installing it as a package.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
@@ -50,8 +54,11 @@ def team_factory(db):
     Returns:
         The committed Team instance.
     """
-    def make(code, name):
-        team = Team(code=code, name=name)
+    def make(code, name, team_id=None, franchise_id=None, full_name=None,
+             league_id=None, raw_tricode=None):
+        team = Team(tri_code=code, name=name, team_id=team_id,
+                    franchise_id=franchise_id, full_name=full_name,
+                    league_id=league_id, raw_tricode=raw_tricode)
         db.session.add(team)
         db.session.commit()
         return team

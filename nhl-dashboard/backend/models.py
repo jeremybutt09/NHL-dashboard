@@ -5,11 +5,16 @@ from extensions import db
 class Team(db.Model):
     __tablename__ = 'team'
 
-    code = db.Column(db.String(3), primary_key=True)   # 'TOR'
-    name = db.Column(db.String(64))                    # 'Maple Leafs'
+    tri_code     = db.Column(db.String(3), primary_key=True)              # 'TOR'
+    name         = db.Column(db.String(64))                               # 'Maple Leafs'
+    team_id      = db.Column(db.Integer, unique=True)     # stats API id (populated by #112)
+    franchise_id = db.Column(db.Integer)
+    full_name    = db.Column(db.String(128))
+    league_id    = db.Column(db.Integer)
+    raw_tricode  = db.Column(db.String(8))
 
     def __repr__(self):
-        return f'<Team {self.code}>'
+        return f'<Team {self.tri_code} team_id={self.team_id}>'
 
 
 class Game(db.Model):
@@ -18,8 +23,8 @@ class Game(db.Model):
     id          = db.Column(db.Integer, primary_key=True)   # NHL gamePk
     start_utc   = db.Column(db.DateTime, index=True, nullable=False)
     venue       = db.Column(db.String(120))
-    away_code   = db.Column(db.String(3), db.ForeignKey('team.code'))
-    home_code   = db.Column(db.String(3), db.ForeignKey('team.code'))
+    away_code   = db.Column(db.String(3), db.ForeignKey('team.tri_code'))
+    home_code   = db.Column(db.String(3), db.ForeignKey('team.tri_code'))
     status      = db.Column(db.String(16), nullable=False)   # 'scheduled' | 'live' | 'final'
     period      = db.Column(db.String(8),  nullable=True)
     clock       = db.Column(db.String(8),  nullable=True)

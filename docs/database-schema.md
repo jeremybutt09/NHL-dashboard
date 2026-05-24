@@ -13,14 +13,21 @@ The NHL Dashboard uses **SQLite** via **Flask-SQLAlchemy**. The schema is define
 
 ### `team`
 
-Stores one row per NHL franchise.
+Stores one row per NHL franchise. The six new columns map directly to fields from the
+NHL Stats API (`https://api.nhle.com/stats/rest/en/team`). `team_id` is populated by
+the stats-API seeding job (Issue #112) and is NULL until that job runs.
 
-| Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
-|--------|----------------|-------------|-------------|-------------|
-| `code` | `String(3)` | `VARCHAR(3)` | **PRIMARY KEY**, NOT NULL | Three-letter team abbreviation (e.g. `BOS`, `TOR`) |
-| `name` | `String(64)` | `VARCHAR(64)` | — | Full team display name (e.g. `Boston Bruins`) |
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `tri_code` | `String(3)` | `VARCHAR(3)` | **PRIMARY KEY**, NOT NULL | `triCode` | Three-letter team abbreviation (e.g. `BOS`, `TOR`). Join key for `game.away_code` / `game.home_code` |
+| `name` | `String(64)` | `VARCHAR(64)` | — | (schedule API) | Full team display name (e.g. `Boston Bruins`) |
+| `team_id` | `Integer` | `INTEGER` | **UNIQUE**, NULLABLE | `id` | Numeric team ID from the NHL Stats API. Unique when non-NULL; NULL until stats-API seed runs |
+| `franchise_id` | `Integer` | `INTEGER` | — | `franchiseId` | NHL franchise identifier |
+| `full_name` | `String(128)` | `VARCHAR(128)` | — | `fullName` | Official full team name from the Stats API (e.g. `Boston Bruins`) |
+| `league_id` | `Integer` | `INTEGER` | — | `leagueId` | League identifier (NHL = 133) |
+| `raw_tricode` | `String(8)` | `VARCHAR(8)` | — | `rawTricode` | Raw tricode as returned by the Stats API |
 
-**Indices:** Primary key index on `code`.
+**Indices:** Primary key index on `tri_code`; unique index on `team_id` (NULLs excluded).
 
 ---
 
@@ -33,8 +40,8 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 | `id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | NHL game ID (`gamePk`) from the public NHL API |
 | `start_utc` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | Scheduled puck-drop time in UTC |
 | `venue` | `String(120)` | `VARCHAR(120)` | — | Arena name (e.g. `TD Garden`) |
-| `away_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.code` | Visiting team abbreviation |
-| `home_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.code` | Home team abbreviation |
+| `away_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.tri_code` | Visiting team abbreviation |
+| `home_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.tri_code` | Home team abbreviation |
 | `status` | `String(16)` | `VARCHAR(16)` | NOT NULL | Normalized game state: one of `scheduled`, `live`, `final` |
 | `period` | `String(8)` | `VARCHAR(8)` | NULLABLE | Current period label (e.g. `1st`, `OT`). `NULL` for pre-game |
 | `clock` | `String(8)` | `VARCHAR(8)` | NULLABLE | Time remaining in period (e.g. `12:34`). `NULL` for pre-game |
@@ -45,8 +52,8 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 | `updated_at` | `DateTime` | `DATETIME` | — | Timestamp of the most recent write from the poll job |
 
 **Foreign Keys:**
-- `away_code` → `team.code` — links the visiting team to the `team` table.
-- `home_code` → `team.code` — links the home team to the `team` table.
+- `away_code` → `team.tri_code` — links the visiting team to the `team` table.
+- `home_code` → `team.tri_code` — links the home team to the `team` table.
 
 **Indices:**
 - `ix_game_start_utc` on `start_utc` — used by the games route to filter and sort today's slate efficiently.
@@ -107,6 +114,6 @@ team (code PK)
   team (code PK)    game (id PK) ←── FK (game_id, PK) ── model_fair
 ```
 
-- Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.code`.
+- Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.tri_code`.
 - `odds_snapshot` has a many-to-one relationship with `game`: many snapshots can exist per game (one per poll cycle per book).
 - `model_fair` has a one-to-one relationship with `game`: `game_id` is both the primary key and a foreign key, preventing duplicate fair-value rows for the same game.

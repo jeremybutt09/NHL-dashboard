@@ -30,9 +30,9 @@ One `Team` row is upserted per unique team abbreviation found in today's games
 
 | API JSON path | `team` column | Transform |
 |---|---|---|
-| `gameWeek[].games[].awayTeam.abbrev` | `team.code` | None — 3-letter abbreviation used as primary key; existing row is updated, not duplicated |
+| `gameWeek[].games[].awayTeam.abbrev` | `team.tri_code` | None — 3-letter abbreviation used as primary key; existing row is updated, not duplicated |
 | `gameWeek[].games[].awayTeam.placeName.default` + `commonName.default` | `team.name` | Concatenated to form full name (e.g. `Toronto Maple Leafs`); falls back to abbreviation |
-| `gameWeek[].games[].homeTeam.abbrev` | `team.code` | None — same upsert logic as away team |
+| `gameWeek[].games[].homeTeam.abbrev` | `team.tri_code` | None — same upsert logic as away team |
 | `gameWeek[].games[].homeTeam.placeName.default` + `commonName.default` | `team.name` | Same as above |
 
 ### → `game` table
@@ -44,8 +44,8 @@ One `Game` row is upserted per game in today's slate.
 | `gameWeek[].games[].id` | `game.id` | None — integer game ID used as primary key |
 | `gameWeek[].games[].startTimeUTC` | `game.start_utc` | ISO 8601 string parsed via `datetime.fromisoformat()` with `Z` → `+00:00` substitution; `tzinfo` stripped before storage (stored as naive UTC `DATETIME`) |
 | `gameWeek[].games[].venue.default` | `game.venue` | None |
-| `gameWeek[].games[].awayTeam.abbrev` | `game.away_code` | None — FK → `team.code` |
-| `gameWeek[].games[].homeTeam.abbrev` | `game.home_code` | None — FK → `team.code` |
+| `gameWeek[].games[].awayTeam.abbrev` | `game.away_code` | None — FK → `team.tri_code` |
+| `gameWeek[].games[].homeTeam.abbrev` | `game.home_code` | None — FK → `team.tri_code` |
 | `gameWeek[].games[].gameState` | `game.status` | Inline in `refresh_slate()`: `{"LIVE","CRIT"}` → `"live"`, `{"FINAL","OFF"}` → `"final"`, anything else → `"scheduled"` |
 | `gameWeek[].games[].awayTeam.score` | `game.away_score` | Defaults to `0` if key absent |
 | `gameWeek[].games[].homeTeam.score` | `game.home_score` | Defaults to `0` if key absent |

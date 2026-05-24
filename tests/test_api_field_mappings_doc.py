@@ -31,7 +31,7 @@ def test_boxscore_endpoint_section_present():
 def test_team_table_mappings_present():
     """team table column mappings must be documented."""
     text = _doc_text()
-    assert "team.code" in text, "team.code mapping missing"
+    assert "team.tri_code" in text, "team.tri_code mapping missing"
     assert "team.name" in text, "team.name mapping missing"
 
 

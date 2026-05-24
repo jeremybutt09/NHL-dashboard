@@ -22,7 +22,7 @@ def test_team_factory_creates_committed_row(team_factory, db):
     """team_factory(code, name) creates and persists a Team row."""
     from models import Team
     team = team_factory(code="TOR", name="Toronto Maple Leafs")
-    assert team.code == "TOR"
+    assert team.tri_code == "TOR"
     assert team.name == "Toronto Maple Leafs"
     assert Team.query.get("TOR") is not None
 
