@@ -262,3 +262,84 @@ def test_notebook_db_path_defined_only_in_first_code_cell():
     assert definitions[0] == 0, (
         f"DB_PATH assignment found in code cell index {definitions[0]}, expected cell index 0"
     )
+
+
+# ── Issue #128: Section 3 — last 10 games instead of today's games ────────────
+
+
+def _get_section3_cells(nb: dict):
+    """Return (markdown_cell, code_cell) for Section 3 (not 3.5)."""
+    cells = nb.get("cells", [])
+    for i, cell in enumerate(cells):
+        source = "".join(cell.get("source", []))
+        if "Section 3 —" in source and cell.get("cell_type") == "markdown":
+            for j in range(i + 1, len(cells)):
+                if cells[j].get("cell_type") == "code":
+                    return cell, cells[j]
+    return None, None
+
+
+def test_section3_markdown_mentions_last_10_games():
+    """Section 3 markdown cell must describe 'last 10 games', not today's slate."""
+    nb = _load_notebook()
+    md_cell, _ = _get_section3_cells(nb)
+    assert md_cell is not None, "Section 3 markdown cell not found"
+    source = "".join(md_cell.get("source", []))
+    assert "last 10" in source.lower(), (
+        "Section 3 markdown must mention 'last 10 games' (Issue #128)"
+    )
+
+
+def test_section3_code_print_says_last_10_games():
+    """Section 3 code cell must print 'Last 10 games:' not 'Games today:'."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "Last 10 games:" in source, (
+        "Section 3 must use 'Last 10 games:' print label (Issue #128)"
+    )
+
+
+def test_section3_code_has_no_games_today_label():
+    """Section 3 code cell must not use 'Games today:' print label."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "Games today:" not in source, (
+        "Section 3 'Games today:' label must be replaced with 'Last 10 games:' (Issue #128)"
+    )
+
+
+def test_section3_code_uses_order_by_start_est_desc():
+    """Section 3 code SQL must use ORDER BY start_est DESC."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "start_est DESC" in source, (
+        "Section 3 SQL must ORDER BY start_est DESC (Issue #128)"
+    )
+
+
+def test_section3_code_uses_limit_10():
+    """Section 3 code SQL must include LIMIT 10."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "LIMIT 10" in source, (
+        "Section 3 SQL must include LIMIT 10 (Issue #128)"
+    )
+
+
+def test_section3_code_has_no_today_date_filter():
+    """Section 3 code must not filter games by today's date."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "LIKE :today" not in source, (
+        "Section 3 must not filter by today's date — show last 10 regardless (Issue #128)"
+    )

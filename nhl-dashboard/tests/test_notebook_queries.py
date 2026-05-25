@@ -531,3 +531,83 @@ class TestSection3NotebookContent:
         """Cell c03 _parse_utc body must call replace(tzinfo=None) to strip tz-awareness."""
         src = _notebook_source()
         assert "replace(tzinfo=None)" in src
+
+
+# ── Issue #128: Section 3 last-10-games SQL ───────────────────────────────────
+
+
+class TestSection3Last10GamesQuery:
+    """Validates the last-10-games SQL used in notebook Section 3 (Issue #128)."""
+
+    def _seed_games(self, db):
+        """Insert 12 games with distinct past start_est values."""
+        from models import Game
+
+        for i in range(12):
+            db.session.add(Game(
+                game_id=2026010001 + i,
+                start_est=datetime(2026, 5, 10, 19, 0, tzinfo=timezone.utc) + timedelta(hours=i),
+                status="final",
+            ))
+        db.session.commit()
+
+    def test_section3_last10_returns_rows_when_no_today_games(self, db):
+        """Query returns rows even when no games are scheduled for today."""
+        self._seed_games(db)
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                "SELECT game_id, away_code, home_code, start_est, status"
+                " FROM game"
+                " ORDER BY start_est DESC LIMIT 10"
+            )
+        )
+        rows = result.fetchall()
+        assert len(rows) == 10
+
+    def test_section3_last10_ordered_newest_first(self, db):
+        """Query returns games ordered by start_est descending (newest first)."""
+        from models import Game
+
+        db.session.add(Game(
+            game_id=1001,
+            start_est=datetime(2026, 5, 20, 19, 0, tzinfo=timezone.utc),
+            status="final",
+        ))
+        db.session.add(Game(
+            game_id=1003,
+            start_est=datetime(2026, 5, 22, 19, 0, tzinfo=timezone.utc),
+            status="final",
+        ))
+        db.session.add(Game(
+            game_id=1002,
+            start_est=datetime(2026, 5, 21, 19, 0, tzinfo=timezone.utc),
+            status="final",
+        ))
+        db.session.commit()
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+        )
+        game_ids = [r.game_id for r in result.fetchall()]
+        assert game_ids == [1003, 1002, 1001]
+
+    def test_section3_last10_limits_to_10_rows(self, db):
+        """Query returns at most 10 rows even when more than 10 games exist."""
+        self._seed_games(db)  # seeds 12 games
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+        )
+        assert len(result.fetchall()) == 10
+
+    def test_section3_last10_empty_table_returns_zero_rows(self, db):
+        """Query on empty game table returns zero rows without error."""
+        conn = db.engine.connect()
+        result = conn.execute(
+            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+        )
+        assert result.fetchall() == []
