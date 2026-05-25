@@ -80,3 +80,26 @@ class NhlOddsPartner(db.Model):
 
     def __repr__(self):
         return f'<NhlOddsPartner {self.partner_id} {self.name!r}>'
+
+
+class NhlOddsLine(db.Model):
+    """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
+
+    One row is inserted per (game, partner) per poll cycle, subject to a 3-minute
+    duplicate-suppression window. Rows are pruned after 30 days.
+    """
+    __tablename__ = 'nhl_odds_line'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    game_id    = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False, index=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey('nhl_odds_partner.partner_id'), nullable=False)
+    fetched_at = db.Column(db.DateTime, nullable=False, index=True)
+    away_value = db.Column(db.String(16))
+    home_value = db.Column(db.String(16))
+
+    __table_args__ = (
+        db.Index('ix_nhl_odds_line_game_partner_fetched', 'game_id', 'partner_id', 'fetched_at'),
+    )
+
+    def __repr__(self):
+        return f'<NhlOddsLine game={self.game_id} partner={self.partner_id} {self.fetched_at}>'

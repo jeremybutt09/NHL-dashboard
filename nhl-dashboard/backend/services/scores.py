@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from extensions import db
-from models import Game, NhlOddsPartner
+from models import Game, NhlOddsLine, NhlOddsPartner
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,60 @@ def _upsert_partners(partners_list: list) -> None:
         db.session.commit()
 
 
+_ODDS_COOLDOWN_SECONDS = 180  # 3-minute duplicate-suppression window
+
+
+def _insert_odds_lines(game_id: int, away_odds: list, home_odds: list, now: datetime) -> None:
+    """Insert NhlOddsLine rows for a single game, pairing odds by providerId.
+
+    Args:
+        game_id: The game's primary key (FK → game.game_id).
+        away_odds: List of ``{"providerId": int, "value": str}`` dicts for the away team.
+        home_odds: List of ``{"providerId": int, "value": str}`` dicts for the home team.
+        now: Current UTC datetime used for fetched_at and cooldown checks.
+
+    Only partners present in *both* away and home arrays produce a row.  Unknown
+    partner IDs (not in nhl_odds_partner) are skipped with a WARNING.  A 3-minute
+    cooldown prevents duplicate rows within the same poll window.
+    """
+    from sqlalchemy import select
+
+    if not away_odds and not home_odds:
+        return
+
+    away_map = {o['providerId']: o['value'] for o in (away_odds or [])}
+    home_map = {o['providerId']: o['value'] for o in (home_odds or [])}
+    paired_ids = set(away_map) & set(home_map)
+
+    for pid in sorted(paired_ids):
+        partner = db.session.get(NhlOddsPartner, pid)
+        if partner is None:
+            logger.warning('[scores] Unknown partner_id %s, skipping odds line', pid)
+            continue
+
+        # Cooldown: skip if a row for this (game, partner) was inserted < 3 min ago
+        latest = db.session.scalars(
+            select(NhlOddsLine)
+            .where(NhlOddsLine.game_id == game_id, NhlOddsLine.partner_id == pid)
+            .order_by(NhlOddsLine.fetched_at.desc())
+            .limit(1)
+        ).first()
+        if latest is not None:
+            last_ts = latest.fetched_at
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            if (now - last_ts).total_seconds() < _ODDS_COOLDOWN_SECONDS:
+                continue
+
+        db.session.add(NhlOddsLine(
+            game_id=game_id,
+            partner_id=pid,
+            fetched_at=now,
+            away_value=away_map[pid],
+            home_value=home_map[pid],
+        ))
+
+
 def refresh_scores() -> None:
     """Fetch /v1/score/now and update all matched game rows in a single DB commit.
 
@@ -140,6 +194,10 @@ def refresh_scores() -> None:
 
     now = datetime.now(timezone.utc)
     for game in db_games:
-        _update_game_from_score_data(game, api_game_map[game.game_id], now)
+        game_data = api_game_map[game.game_id]
+        _update_game_from_score_data(game, game_data, now)
+        away_odds = game_data.get('awayTeam', {}).get('odds', [])
+        home_odds = game_data.get('homeTeam', {}).get('odds', [])
+        _insert_odds_lines(game.game_id, away_odds, home_odds, now)
 
     db.session.commit()

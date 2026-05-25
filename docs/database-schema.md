@@ -134,6 +134,45 @@ Registry of NHL betting partners seeded from the `oddsPartners` array in `GET /v
 
 ---
 
+### `nhl_odds_line`
+
+Time-series log of per-game, per-partner moneylines sourced from the `awayTeam.odds` and
+`homeTeam.odds` arrays in `GET /v1/score/now`. One row is inserted per `(game_id, partner_id)`
+per poll cycle, subject to a **3-minute duplicate-suppression window** (mirrors `odds_snapshot`
+behaviour). Rows are pruned after **30 days** (longer than `odds_snapshot`'s 7 days, since
+cross-partner history is more analytically valuable).
+
+Odds values are stored **as raw strings** — American format (`"-152"`, `"+126"`) for North
+American partners and decimal format (`"1.67"`, `"2.24"`) for European partners. Format
+detection and normalisation belong in the display/query layer, not at insert time.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
+|--------|----------------|-------------|-------------|-------------|
+| `id` | `Integer` | `INTEGER` | **PRIMARY KEY** (autoincrement), NOT NULL | Surrogate row key |
+| `game_id` | `Integer` | `INTEGER` | **FOREIGN KEY** → `game.game_id`, NOT NULL, **INDEX** | The game these odds belong to |
+| `partner_id` | `Integer` | `INTEGER` | **FOREIGN KEY** → `nhl_odds_partner.partner_id`, NOT NULL | The betting partner |
+| `fetched_at` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | UTC timestamp when this row was recorded |
+| `away_value` | `String(16)` | `VARCHAR(16)` | — | Raw odds string for the away team (e.g. `"-152"`, `"1.67"`) |
+| `home_value` | `String(16)` | `VARCHAR(16)` | — | Raw odds string for the home team (e.g. `"+126"`, `"2.24"`) |
+
+**Foreign Keys:**
+- `game_id` → `game.game_id` — ties each odds line to the specific game being priced.
+- `partner_id` → `nhl_odds_partner.partner_id` — ties each row to the registered betting partner.
+
+**Indices:**
+- `ix_nhl_odds_line_game_id` on `game_id` — efficient lookup of all odds lines for a game.
+- `ix_nhl_odds_line_fetched_at` on `fetched_at` — used by the prune job to filter by age.
+- `ix_nhl_odds_line_game_partner_fetched` composite on `(game_id, partner_id, fetched_at)` — enables efficient "latest odds per game+partner" queries and the cooldown deduplication check.
+
+**Insert strategy:** pairing by `providerId` — a `{providerId: value}` dict is built for away
+and home independently; only providers present in *both* dicts produce a row. Unknown
+`providerId` values (not in `nhl_odds_partner`) are skipped with a `WARNING` log.
+
+**Pruning:** `prune_nhl_odds_lines()` in `services/slate.py` deletes rows where
+`fetched_at < now - 30 days`. Should be run as a scheduled job (daily is sufficient).
+
+---
+
 ## Entity-Relationship Summary
 
 ```
@@ -143,10 +182,13 @@ team (tri_code PK)
   ↑ FK (home_code)
   team (tri_code PK)  game (game_id PK) ←── FK (game_id, PK) ── model_fair
 
-nhl_odds_partner (partner_id PK)   [no FK to game; referenced by nhl_odds_line #119]
+nhl_odds_partner (partner_id PK)
+  ↑ FK (partner_id)
+  nhl_odds_line (id PK) ──── FK (game_id) ────→ game (game_id PK)
 ```
 
 - Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.tri_code`.
 - `odds_snapshot` has a many-to-one relationship with `game`: many snapshots can exist per game (one per poll cycle per book).
 - `model_fair` has a one-to-one relationship with `game`: `game_id` is both the primary key and a foreign key, preventing duplicate fair-value rows for the same game.
-- `nhl_odds_partner` is a standalone reference table with no foreign keys of its own. It will be referenced by `nhl_odds_line` (Issue #119) via `partner_id`.
+- `nhl_odds_partner` is a reference table. It is referenced by `nhl_odds_line` via `partner_id`.
+- `nhl_odds_line` has a many-to-one relationship with both `game` (via `game_id`) and `nhl_odds_partner` (via `partner_id`). Many lines can exist per game+partner pair (one per poll window).

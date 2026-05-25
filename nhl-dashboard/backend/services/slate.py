@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 from extensions import db
-from models import Game, OddsSnapshot, ModelFair
+from models import Game, NhlOddsLine, OddsSnapshot, ModelFair
 from services.implied import american_to_implied, devig_two_way, edge as calc_edge
 
 logger = logging.getLogger(__name__)
@@ -322,6 +322,19 @@ def refresh_odds():
     if rows:
         db.session.commit()
         print(f'[slate] Inserted {len(rows)} demo OddsSnapshot rows')
+
+
+def prune_nhl_odds_lines():
+    """Delete NhlOddsLine rows older than 30 days."""
+    from sqlalchemy import delete
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    result = db.session.execute(
+        delete(NhlOddsLine).where(NhlOddsLine.fetched_at < cutoff)
+    )
+    db.session.commit()
+    logger.info('[slate] Pruned %d nhl_odds_line rows older than 30 days', result.rowcount)
 
 
 def prune_old_snapshots():
