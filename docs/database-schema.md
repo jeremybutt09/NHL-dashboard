@@ -173,6 +173,38 @@ and home independently; only providers present in *both* dicts produce a row. Un
 
 ---
 
+### `nhl_historical_game`
+
+Complete historical game records backfilled from the NHL Stats REST API
+(`GET https://api.nhle.com/stats/rest/en/game`). One row per game; upserted by
+`game_id` on each backfill run. This table is intentionally independent of the
+`game` table — it uses integer team IDs (not `tri_code` FKs) and covers the full
+historical game set, not just the current day's slate.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | `id` | NHL numeric game ID — primary key, not auto-generated |
+| `eastern_start_time` | `String(16)` | `VARCHAR(16)` | — | `easternStartTime` | Scheduled start time in Eastern time (e.g. `"07:30 PM"`) |
+| `game_date` | `String(10)` | `VARCHAR(10)` | **INDEX** | `gameDate` | Game date in `YYYY-MM-DD` format |
+| `game_number` | `Integer` | `INTEGER` | — | `gameNumber` | Sequential game number within the season |
+| `game_schedule_state_id` | `Integer` | `INTEGER` | — | `gameScheduleStateId` | NHL scheduling state code (e.g. `1` = normal) |
+| `game_state_id` | `Integer` | `INTEGER` | — | `gameStateId` | NHL game state code (e.g. `4` = final) |
+| `game_type` | `Integer` | `INTEGER` | — | `gameType` | Game type code (e.g. `1` = preseason, `2` = regular season, `3` = playoffs) |
+| `home_score` | `Integer` | `INTEGER` | — | `homeScore` | Home team final or current score |
+| `home_team_id` | `Integer` | `INTEGER` | — | `homeTeamId` | Numeric ID of the home team (matches `team.team_id` when seeded) |
+| `period` | `Integer` | `INTEGER` | — | `period` | Period at which the game ended or is currently in |
+| `season` | `Integer` | `INTEGER` | **INDEX** | `season` | Eight-digit season identifier (e.g. `20252026`) |
+| `visiting_score` | `Integer` | `INTEGER` | — | `visitingScore` | Visiting (away) team final or current score |
+| `visiting_team_id` | `Integer` | `INTEGER` | — | `visitingTeamId` | Numeric ID of the visiting (away) team |
+
+**Upsert strategy:** `db.session.merge()` on `game_id` PK — idempotent; overwrites changed fields on repeated backfill runs. No pruning: this is a durable historical record.
+
+**Indices:** Primary key index on `game_id`; secondary indices on `game_date` and `season` to support date-range and season-filter queries.
+
+**Source function:** `ingest_historical_games()` in `nhl-dashboard/backend/services/historical.py`.
+
+---
+
 ## Entity-Relationship Summary
 
 ```
@@ -185,6 +217,8 @@ team (tri_code PK)
 nhl_odds_partner (partner_id PK)
   ↑ FK (partner_id)
   nhl_odds_line (id PK) ──── FK (game_id) ────→ game (game_id PK)
+
+nhl_historical_game (game_id PK)   ← standalone; no FK to game or team
 ```
 
 - Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.tri_code`.
@@ -192,3 +226,4 @@ nhl_odds_partner (partner_id PK)
 - `model_fair` has a one-to-one relationship with `game`: `game_id` is both the primary key and a foreign key, preventing duplicate fair-value rows for the same game.
 - `nhl_odds_partner` is a reference table. It is referenced by `nhl_odds_line` via `partner_id`.
 - `nhl_odds_line` has a many-to-one relationship with both `game` (via `game_id`) and `nhl_odds_partner` (via `partner_id`). Many lines can exist per game+partner pair (one per poll window).
+- `nhl_historical_game` is a **standalone** table with no foreign keys. Its `home_team_id` and `visiting_team_id` columns hold the same numeric IDs as `team.team_id` but are not enforced via FK constraints, keeping the historical backfill independent of the live-slate data model.

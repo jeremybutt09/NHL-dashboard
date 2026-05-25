@@ -49,6 +49,20 @@ def get_score_now() -> dict:
     return _get('/score/now')
 
 
+def get_all_games() -> list[dict]:
+    """All historical NHL games: GET https://api.nhle.com/stats/rest/en/game
+
+    Returns:
+        List of game dicts, each containing id, easternStartTime, gameDate,
+        gameNumber, gameScheduleStateId, gameStateId, gameType, homeScore,
+        homeTeamId, period, season, visitingScore, visitingTeamId.
+    """
+    url = f'{_STATS_BASE}/game'
+    resp = httpx.get(url, timeout=120, follow_redirects=True)
+    resp.raise_for_status()
+    return resp.json().get('data', [])
+
+
 def get_all_teams() -> list[dict]:
     """All NHL franchises: GET https://api.nhle.com/stats/rest/en/team
 

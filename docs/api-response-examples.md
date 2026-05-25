@@ -240,6 +240,58 @@ Values are percentage points (e.g. `45.38` means 45.38 %).
 
 ---
 
+## NHL Stats REST API — `GET /stats/rest/en/game`
+
+**Base URL:** `https://api.nhle.com/stats/rest/en`
+
+Returns the full historical game set. Consumed by `get_all_games()` in
+`nhl_client.py` and persisted by `ingest_historical_games()` in
+`services/historical.py` into the `nhl_historical_game` table.
+
+### Response shape
+
+```json
+{
+  "data": [
+    {
+      "id": 2026020001,
+      "easternStartTime": "07:30 PM",
+      "gameDate": "2026-01-10",
+      "gameNumber": 1,
+      "gameScheduleStateId": 1,
+      "gameStateId": 4,
+      "gameType": 2,
+      "homeScore": 3,
+      "homeTeamId": 10,
+      "period": 3,
+      "season": 20252026,
+      "visitingScore": 2,
+      "visitingTeamId": 15
+    }
+  ],
+  "total": 65432
+}
+```
+
+| Field | Type | DB column | Notes |
+|-------|------|-----------|-------|
+| `id` | `integer` | `game_id` (PK) | NHL numeric game identifier |
+| `easternStartTime` | `string` | `eastern_start_time` | e.g. `"07:30 PM"` |
+| `gameDate` | `string` | `game_date` | `YYYY-MM-DD` |
+| `gameNumber` | `integer` | `game_number` | Sequential within season |
+| `gameScheduleStateId` | `integer` | `game_schedule_state_id` | NHL scheduling state code |
+| `gameStateId` | `integer` | `game_state_id` | NHL game state code (4 = final) |
+| `gameType` | `integer` | `game_type` | 1 = preseason, 2 = regular, 3 = playoffs |
+| `homeScore` | `integer` | `home_score` | — |
+| `homeTeamId` | `integer` | `home_team_id` | Matches `team.team_id` when seeded |
+| `period` | `integer` | `period` | Period at game end or current period |
+| `season` | `integer` | `season` | e.g. `20252026` |
+| `visitingScore` | `integer` | `visiting_score` | — |
+| `visitingTeamId` | `integer` | `visiting_team_id` | Matches `team.team_id` when seeded |
+| `total` | `integer` | not stored | Pagination envelope field — row count only |
+
+---
+
 ## Error Responses
 
 All error responses return JSON with a consistent shape and never return

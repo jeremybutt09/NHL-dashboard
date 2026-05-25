@@ -158,6 +158,43 @@ following keys from each `fetch_odds()` dict are written to `odds_snapshot`:
 
 ---
 
+## Endpoint 3 — `https://api.nhle.com/stats/rest/en/game`
+
+**Base URL:** `https://api.nhle.com/stats/rest/en`
+
+Called once (or on-demand) by `get_all_games()` in `nhl_client.py`. The full
+historical game list is returned in a single response under the `"data"` key.
+Parsed and persisted by `ingest_historical_games()` in `services/historical.py`
+using `db.session.merge()` on `game_id` (idempotent upsert).
+
+### → `nhl_historical_game` table
+
+One row per game; all fields mapped directly with no transformation.
+
+| API JSON path | `nhl_historical_game` column | Notes |
+|---|---|---|
+| `data[].id` | `game_id` | Integer primary key — not auto-generated |
+| `data[].easternStartTime` | `eastern_start_time` | String as returned (e.g. `"07:30 PM"`) |
+| `data[].gameDate` | `game_date` | String in `YYYY-MM-DD` format |
+| `data[].gameNumber` | `game_number` | Integer |
+| `data[].gameScheduleStateId` | `game_schedule_state_id` | Integer state code |
+| `data[].gameStateId` | `game_state_id` | Integer state code |
+| `data[].gameType` | `game_type` | Integer (2 = regular season, 3 = playoffs) |
+| `data[].homeScore` | `home_score` | Integer |
+| `data[].homeTeamId` | `home_team_id` | Integer; matches `team.team_id` when seeded |
+| `data[].period` | `period` | Integer period at game end or current period |
+| `data[].season` | `season` | Integer, e.g. `20252026` |
+| `data[].visitingScore` | `visiting_score` | Integer |
+| `data[].visitingTeamId` | `visiting_team_id` | Integer; matches `team.team_id` when seeded |
+
+### Ignored / unused fields from the Stats REST `/game` endpoint
+
+| API JSON path | Notes |
+|---|---|
+| `total` | Total row count from the API pagination envelope — not stored |
+
+---
+
 ## Transformation Reference
 
 Status-mapping and period-mapping logic are implemented **inline** — there are no

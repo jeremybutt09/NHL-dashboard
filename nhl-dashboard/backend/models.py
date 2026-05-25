@@ -82,6 +82,32 @@ class NhlOddsPartner(db.Model):
         return f'<NhlOddsPartner {self.partner_id} {self.name!r}>'
 
 
+class NhlHistoricalGame(db.Model):
+    """Historical game record from the NHL Stats REST API /game endpoint.
+
+    Sourced from GET https://api.nhle.com/stats/rest/en/game. One row per game;
+    upserted by game_id so repeated backfill runs are idempotent.
+    """
+    __tablename__ = 'nhl_historical_game'
+
+    game_id                = db.Column(db.Integer, primary_key=True)        # API: id
+    eastern_start_time     = db.Column(db.String(16))                       # API: easternStartTime
+    game_date              = db.Column(db.String(10), index=True)            # API: gameDate
+    game_number            = db.Column(db.Integer)                          # API: gameNumber
+    game_schedule_state_id = db.Column(db.Integer)                          # API: gameScheduleStateId
+    game_state_id          = db.Column(db.Integer)                          # API: gameStateId
+    game_type              = db.Column(db.Integer)                          # API: gameType
+    home_score             = db.Column(db.Integer)                          # API: homeScore
+    home_team_id           = db.Column(db.Integer)                          # API: homeTeamId
+    period                 = db.Column(db.Integer)                          # API: period
+    season                 = db.Column(db.Integer, index=True)              # API: season
+    visiting_score         = db.Column(db.Integer)                          # API: visitingScore
+    visiting_team_id       = db.Column(db.Integer)                          # API: visitingTeamId
+
+    def __repr__(self):
+        return f'<NhlHistoricalGame {self.game_id} season={self.season}>'
+
+
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 

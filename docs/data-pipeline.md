@@ -24,6 +24,9 @@ odds_snapshot (latest per game)
 odds_snapshot
   └──> _prune_snapshots()
          └──> prune_old_snapshots() ──> DELETE rows WHERE fetched_at < now() − 7 days
+
+NHL stats/rest/en/game (full historical set)
+  └──> ingest_historical_games()   ──> nhl_historical_game (upsert by game_id)
 ```
 
 Flask routes serve data from the database; no job bypasses the DB to return live API data directly.
@@ -41,6 +44,7 @@ All five jobs are registered in `nhl-dashboard/backend/scheduler.py` via APSched
 | `poll_odds` | Every 5 minutes | `_poll_odds()` → `refresh_odds()` | `odds_snapshot` | Insert-only (append) |
 | `compute_fair` | Every 5 minutes | `_compute_fair()` (inline) | `model_fair` | Upsert |
 | `prune` | Every 1 hour | `_prune_snapshots()` → `prune_old_snapshots()` | `odds_snapshot` | Delete (age-based purge) |
+| *(on-demand)* | Manual / startup backfill | `ingest_historical_games()` in `services/historical.py` | `nhl_historical_game` | Upsert by `game_id` |
 
 ---
 
@@ -142,6 +146,22 @@ The resulting `away_fair` and `home_fair` values (stored in `model_fair`) sum to
 
 ---
 
+### `ingest_historical_games` — On-Demand Backfill
+
+**Source:** `nhl-dashboard/backend/services/historical.py` → `ingest_historical_games()`
+
+**What it does:** Calls `GET https://api.nhle.com/stats/rest/en/game` (via `get_all_games()` in `nhl_client.py`), iterates over the full `"data"` array, and upserts each row into `nhl_historical_game` using `db.session.merge()` on the `game_id` primary key. Safe to re-run at any time — existing rows are updated in place and no duplicates are created.
+
+**Tables read:** none  
+**Tables written:** `nhl_historical_game` (upsert by `game_id`)  
+**Update strategy:** Upsert — `db.session.merge()` on `game_id` PK
+
+**Triggering:** This job is not registered with APScheduler and does not run automatically. Call it manually or from a management script when a full backfill or refresh is needed. Issue #122 adds a scheduled daily 30-day refresh variant.
+
+**Staleness signal:** Row count in `nhl_historical_game` significantly below the API `"total"` field indicates a partial run (e.g. timeout). Re-run the function to complete the backfill.
+
+---
+
 ## Local Development Guidance
 
 Not all jobs are equally necessary for local development. The table below indicates which jobs are safe to disable:
@@ -169,4 +189,5 @@ Alternatively, set `TESTING = True` in the app config — this skips `start_sche
 | `nhl-dashboard/backend/services/live.py` | `refresh_live()` — boxscore fetch and update |
 | `nhl-dashboard/backend/services/implied.py` | `devig_two_way()`, `american_to_implied()`, `edge()` |
 | `nhl-dashboard/backend/odds_client.py` | `fetch_odds(game_ids)` — currently a stub fixture |
-| `nhl-dashboard/backend/models.py` | SQLAlchemy models for all four tables |
+| `nhl-dashboard/backend/models.py` | SQLAlchemy models for all tables |
+| `nhl-dashboard/backend/services/historical.py` | `ingest_historical_games()` — historical game backfill |
