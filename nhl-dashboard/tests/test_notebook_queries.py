@@ -74,7 +74,7 @@ class TestExpandedTeamQuery:
         result = conn.execute(
             text(
                 """
-                SELECT g.id, t_away.full_name AS away, t_home.full_name AS home
+                SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
                 FROM game g
                 JOIN team t_away ON t_away.tri_code = g.away_code
                 JOIN team t_home ON t_home.tri_code = g.home_code

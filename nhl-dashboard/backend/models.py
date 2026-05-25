@@ -20,7 +20,7 @@ class Team(db.Model):
 class Game(db.Model):
     __tablename__ = 'game'
 
-    id          = db.Column(db.Integer, primary_key=True)   # NHL gamePk
+    game_id     = db.Column(db.Integer, primary_key=True)   # NHL gamePk
     start_utc   = db.Column(db.DateTime, index=True, nullable=False)
     venue       = db.Column(db.String(120))
     away_code   = db.Column(db.String(3), db.ForeignKey('team.tri_code'))
@@ -38,7 +38,7 @@ class Game(db.Model):
     home_team = db.relationship('Team', foreign_keys=[home_code])
 
     def __repr__(self):
-        return f'<Game {self.away_code}@{self.home_code} {self.id}>'
+        return f'<Game {self.away_code}@{self.home_code} {self.game_id}>'
 
 
 class OddsSnapshot(db.Model):
@@ -46,7 +46,7 @@ class OddsSnapshot(db.Model):
     __tablename__ = 'odds_snapshot'
 
     id          = db.Column(db.Integer, primary_key=True)
-    game_id     = db.Column(db.Integer, db.ForeignKey('game.id'), index=True)
+    game_id     = db.Column(db.Integer, db.ForeignKey('game.game_id'), index=True)
     fetched_at  = db.Column(db.DateTime, index=True, nullable=False)
     book        = db.Column(db.String(32), nullable=False)   # 'consensus' for v1
     away_ml     = db.Column(db.Integer)      # American odds, e.g. +120
@@ -59,7 +59,7 @@ class ModelFair(db.Model):
     """The dashboard's 'fair' probability — your own model output."""
     __tablename__ = 'model_fair'
 
-    game_id     = db.Column(db.Integer, db.ForeignKey('game.id'), primary_key=True)
+    game_id     = db.Column(db.Integer, db.ForeignKey('game.game_id'), primary_key=True)
     away_fair   = db.Column(db.Float)   # percentage points (0–100)
     home_fair   = db.Column(db.Float)   # percentage points (0–100)
     computed_at = db.Column(db.DateTime)

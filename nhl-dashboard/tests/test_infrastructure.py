@@ -36,7 +36,7 @@ def test_game_factory_creates_live_row(game_factory, team_factory, db):
     assert game.status == "live"
     assert game.away_score == 2
     assert game.home_score == 1
-    assert Game.query.get(game.id) is not None
+    assert Game.query.get(game.game_id) is not None
 
 
 def test_odds_snapshot_factory_creates_row(
@@ -46,7 +46,7 @@ def test_odds_snapshot_factory_creates_row(
     team_factory(code="TOR", name="Toronto Maple Leafs")
     team_factory(code="BOS", name="Boston Bruins")
     game = game_factory(away_code="TOR", home_code="BOS")
-    snap = odds_snapshot_factory(game_id=game.id)
+    snap = odds_snapshot_factory(game_id=game.game_id)
     assert snap.away_ml == -110
     assert snap.home_ml == 100
 
@@ -58,7 +58,7 @@ def test_model_fair_factory_creates_row(
     team_factory(code="TOR", name="Toronto Maple Leafs")
     team_factory(code="BOS", name="Boston Bruins")
     game = game_factory(away_code="TOR", home_code="BOS")
-    fair = model_fair_factory(game_id=game.id)
+    fair = model_fair_factory(game_id=game.game_id)
     assert fair.home_fair == pytest.approx(55.0)
     assert fair.away_fair == pytest.approx(45.0)
 

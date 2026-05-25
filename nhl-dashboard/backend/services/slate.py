@@ -148,7 +148,7 @@ def refresh_slate():
 
         row = db.session.get(Game, game_id)
         if row is None:
-            row = Game(id=game_id)
+            row = Game(game_id=game_id)
             db.session.add(row)
 
         row.start_utc  = start_utc
@@ -269,17 +269,17 @@ def _build_from_db(games: list, now: datetime) -> dict:
     for g in games:
         snap = db.session.scalars(
             select(OddsSnapshot)
-            .where(OddsSnapshot.game_id == g.id)
+            .where(OddsSnapshot.game_id == g.game_id)
             .order_by(OddsSnapshot.fetched_at.desc())
         ).first()
 
         snap_open = db.session.scalars(
             select(OddsSnapshot)
-            .where(OddsSnapshot.game_id == g.id)
+            .where(OddsSnapshot.game_id == g.game_id)
             .order_by(OddsSnapshot.fetched_at)
         ).first()
 
-        mf = db.session.get(ModelFair, g.id)
+        mf = db.session.get(ModelFair, g.game_id)
 
         if snap:
             raw_a = american_to_implied(snap.away_ml)
@@ -317,7 +317,7 @@ def _build_from_db(games: list, now: datetime) -> dict:
             start_iso = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         row = {
-            'id':    g.id,
+            'game_id': g.game_id,
             'away':  {'code': g.away_code, 'name': away_name, 'record': '', 'l10': ''},
             'home':  {'code': g.home_code, 'name': home_name, 'record': '', 'l10': ''},
             'start':  start_iso,
@@ -329,7 +329,7 @@ def _build_from_db(games: list, now: datetime) -> dict:
             'implied':{'away': round(imp_a, 2), 'home': round(imp_h, 2)},
             'fair':   {'away': round(fair_a, 2),  'home': round(fair_h, 2)},
             'edge':   round(edge_val, 2) if edge_val is not None else None,
-            'movement_24h': _get_sparkline(g.id),
+            'movement_24h': _get_sparkline(g.game_id),
         }
         result.append(row)
 

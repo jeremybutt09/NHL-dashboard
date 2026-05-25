@@ -73,13 +73,29 @@ class TestTeamModel:
 
 
 class TestGameModel:
+    def test_game_primary_key_attribute_is_game_id(self, db, team_factory, game_factory):
+        """Game instance exposes game_id (not id) as its primary key attribute."""
+        team_factory(code="TOR", name="Toronto Maple Leafs")
+        team_factory(code="BOS", name="Boston Bruins")
+        game = game_factory(away_code="TOR", home_code="BOS")
+        assert game.game_id is not None
+        assert isinstance(game.game_id, int)
+
+    def test_game_sqlite_column_is_named_game_id(self, db, team_factory, game_factory):
+        """SQLite column backing the primary key is literally named 'game_id'."""
+        team_factory(code="TOR", name="Toronto Maple Leafs")
+        team_factory(code="BOS", name="Boston Bruins")
+        game_factory(away_code="TOR", home_code="BOS")
+        row = db.session.execute(text("SELECT game_id FROM game LIMIT 1")).fetchone()
+        assert row is not None
+
     def test_game_create_and_retrieve_by_pk(self, db, team_factory, game_factory):
         """Create a Game and retrieve it by its integer primary key."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
 
-        retrieved = Game.query.get(game.id)
+        retrieved = db.session.get(Game, game.game_id)
         assert retrieved is not None
         assert retrieved.away_code == "TOR"
         assert retrieved.home_code == "BOS"
@@ -117,7 +133,7 @@ class TestOddsSnapshotModel:
         moneylines = [(-110, 100), (-120, 110), (-130, 120)]
         for i, (away_ml, home_ml) in enumerate(moneylines):
             db.session.add(OddsSnapshot(
-                game_id=game.id,
+                game_id=game.game_id,
                 fetched_at=base_time + timedelta(minutes=i),
                 book="consensus",
                 away_ml=away_ml,
@@ -129,7 +145,7 @@ class TestOddsSnapshotModel:
 
         rows = (
             OddsSnapshot.query
-            .filter_by(game_id=game.id)
+            .filter_by(game_id=game.game_id)
             .order_by(OddsSnapshot.fetched_at)
             .all()
         )
@@ -164,10 +180,10 @@ class TestModelFairModel:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
-        model_fair_factory(game_id=game.id, home_fair=55.0, away_fair=45.0)
+        model_fair_factory(game_id=game.game_id, home_fair=55.0, away_fair=45.0)
 
         updated = ModelFair(
-            game_id=game.id,
+            game_id=game.game_id,
             home_fair=60.0,
             away_fair=40.0,
             computed_at=datetime.now(timezone.utc),
@@ -175,7 +191,7 @@ class TestModelFairModel:
         db.session.merge(updated)
         db.session.commit()
 
-        rows = ModelFair.query.filter_by(game_id=game.id).all()
+        rows = ModelFair.query.filter_by(game_id=game.game_id).all()
         assert len(rows) == 1
         assert rows[0].home_fair == pytest.approx(60.0)
         assert rows[0].away_fair == pytest.approx(40.0)
@@ -209,8 +225,8 @@ class TestCascadeBehavior:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
-        odds_snapshot_factory(game_id=game.id)
-        model_fair_factory(game_id=game.id)
+        odds_snapshot_factory(game_id=game.game_id)
+        model_fair_factory(game_id=game.game_id)
 
         db.session.delete(game)
         with pytest.raises(IntegrityError):

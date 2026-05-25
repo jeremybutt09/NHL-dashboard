@@ -151,10 +151,10 @@ class TestPollLive:
 
 class TestPollOdds:
     def _make_game_1001(self, db):
-        """Create a Game with id=1001, which is present in odds_client._MOCK."""
+        """Create a Game with game_id=1001, which is present in odds_client._MOCK."""
         # Use a placeholder team code not needing FK enforcement
         game = Game(
-            id=1001,
+            game_id=1001,
             away_code="TOR",
             home_code="BOS",
             status="scheduled",
@@ -205,12 +205,12 @@ class TestComputeFair:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
-        odds_snapshot_factory(game_id=game.id, away_ml=-110, home_ml=100)
+        odds_snapshot_factory(game_id=game.game_id, away_ml=-110, home_ml=100)
 
         from services.implied import compute_all_fair
         compute_all_fair()
 
-        mf = db.session.get(ModelFair, game.id)
+        mf = db.session.get(ModelFair, game.game_id)
         assert mf is not None
 
     def test_compute_all_fair_probabilities_sum_to_one_hundred(
@@ -220,12 +220,12 @@ class TestComputeFair:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
-        odds_snapshot_factory(game_id=game.id, away_ml=-110, home_ml=100)
+        odds_snapshot_factory(game_id=game.game_id, away_ml=-110, home_ml=100)
 
         from services.implied import compute_all_fair
         compute_all_fair()
 
-        mf = db.session.get(ModelFair, game.id)
+        mf = db.session.get(ModelFair, game.game_id)
         assert mf.home_fair + mf.away_fair == pytest.approx(100.0, abs=0.01)
 
     def test_compute_all_fair_idempotent_single_row_per_game(
@@ -235,14 +235,14 @@ class TestComputeFair:
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
-        odds_snapshot_factory(game_id=game.id)
+        odds_snapshot_factory(game_id=game.game_id)
 
         from services.implied import compute_all_fair
         compute_all_fair()
         compute_all_fair()
 
         rows = db.session.scalars(
-            select(ModelFair).where(ModelFair.game_id == game.id)
+            select(ModelFair).where(ModelFair.game_id == game.game_id)
         ).all()
         assert len(rows) == 1
 
@@ -272,16 +272,16 @@ class TestPruneSnapshots:
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
         now = datetime.now(timezone.utc)
 
-        self._add_snapshot(db, game.id, now)
-        self._add_snapshot(db, game.id, now - timedelta(days=3))
-        self._add_snapshot(db, game.id, now - timedelta(days=8))
+        self._add_snapshot(db, game.game_id, now)
+        self._add_snapshot(db, game.game_id, now - timedelta(days=3))
+        self._add_snapshot(db, game.game_id, now - timedelta(days=8))
         db.session.commit()
 
         from services.slate import prune_old_snapshots
         prune_old_snapshots()
 
         remaining = db.session.scalars(
-            select(OddsSnapshot).where(OddsSnapshot.game_id == game.id)
+            select(OddsSnapshot).where(OddsSnapshot.game_id == game.game_id)
         ).all()
         assert len(remaining) == 2
 
@@ -294,15 +294,15 @@ class TestPruneSnapshots:
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
         now = datetime.now(timezone.utc)
 
-        self._add_snapshot(db, game.id, now)
-        self._add_snapshot(db, game.id, now - timedelta(days=3))
+        self._add_snapshot(db, game.game_id, now)
+        self._add_snapshot(db, game.game_id, now - timedelta(days=3))
         db.session.commit()
 
         from services.slate import prune_old_snapshots
         prune_old_snapshots()
 
         remaining = db.session.scalars(
-            select(OddsSnapshot).where(OddsSnapshot.game_id == game.id)
+            select(OddsSnapshot).where(OddsSnapshot.game_id == game.game_id)
         ).all()
         assert len(remaining) == 2
 
@@ -314,13 +314,13 @@ class TestPruneSnapshots:
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS", status="scheduled")
 
-        self._add_snapshot(db, game.id, datetime.now(timezone.utc))
+        self._add_snapshot(db, game.game_id, datetime.now(timezone.utc))
         db.session.commit()
 
         from services.slate import prune_old_snapshots
         prune_old_snapshots()
 
         remaining = db.session.scalars(
-            select(OddsSnapshot).where(OddsSnapshot.game_id == game.id)
+            select(OddsSnapshot).where(OddsSnapshot.game_id == game.game_id)
         ).all()
         assert len(remaining) == 1

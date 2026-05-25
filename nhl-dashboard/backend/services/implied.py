@@ -77,7 +77,7 @@ def compute_all_fair():
     for g in today_games:
         snap = db.session.scalars(
             select(OddsSnapshot)
-            .where(OddsSnapshot.game_id == g.id)
+            .where(OddsSnapshot.game_id == g.game_id)
             .order_by(OddsSnapshot.fetched_at.desc())
         ).first()
         if not snap:
@@ -87,9 +87,9 @@ def compute_all_fair():
         raw_home = american_to_implied(snap.home_ml)
         fair_away, fair_home = devig_two_way(raw_away, raw_home)
 
-        mf = db.session.get(ModelFair, g.id)
+        mf = db.session.get(ModelFair, g.game_id)
         if mf is None:
-            mf = ModelFair(game_id=g.id)
+            mf = ModelFair(game_id=g.game_id)
             db.session.add(mf)
         mf.away_fair = fair_away
         mf.home_fair = fair_home

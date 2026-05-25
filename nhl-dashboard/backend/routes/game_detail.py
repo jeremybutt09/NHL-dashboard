@@ -21,4 +21,4 @@ def game_detail(game_id):
             'message': f'game_id must be an integer, got: {game_id!r}',
         }), 400
     # v1 stub — full detail endpoint not required for the dashboard
-    return jsonify({'id': game_id_int, 'detail': 'not implemented in v1'})
+    return jsonify({'game_id': game_id_int, 'detail': 'not implemented in v1'})

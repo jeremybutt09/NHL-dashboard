@@ -37,7 +37,7 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 
 | Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
 |--------|----------------|-------------|-------------|-------------|
-| `id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | NHL game ID (`gamePk`) from the public NHL API |
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | NHL game ID (`gamePk`) from the public NHL API |
 | `start_utc` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | Scheduled puck-drop time in UTC |
 | `venue` | `String(120)` | `VARCHAR(120)` | — | Arena name (e.g. `TD Garden`) |
 | `away_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.tri_code` | Visiting team abbreviation |
@@ -68,7 +68,7 @@ cycle so that the 24-hour sparkline can be reconstructed from history.
 | Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
 |--------|----------------|-------------|-------------|-------------|
 | `id` | `Integer` | `INTEGER` | **PRIMARY KEY** (autoincrement), NOT NULL | Surrogate row identifier |
-| `game_id` | `Integer` | `INTEGER` | **FOREIGN KEY** → `game.id`, **INDEX** | The game these odds belong to |
+| `game_id` | `Integer` | `INTEGER` | **FOREIGN KEY** → `game.game_id`, **INDEX** | The game these odds belong to |
 | `fetched_at` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | UTC timestamp when odds were recorded |
 | `book` | `String(32)` | `VARCHAR(32)` | NOT NULL | Sportsbook identifier (e.g. `stub`) |
 | `away_ml` | `Integer` | `INTEGER` | — | Away team American-format money line (e.g. `+150`) |
@@ -77,10 +77,10 @@ cycle so that the 24-hour sparkline can be reconstructed from history.
 | `home_implied` | `Float` | `REAL` | — | Home team implied win probability derived from money line |
 
 **Foreign Keys:**
-- `game_id` → `game.id` — ties each odds row to the specific game being priced.
+- `game_id` → `game.game_id` — ties each odds row to the specific game being priced.
 
 **Indices:**
-- `ix_odds_snapshot_game_id` on `game_id` — speeds up lookups for all odds belonging to a game.
+- `ix_odds_snapshot_game_id` on `game_id` — speeds up lookups for all odds belonging to a game (FK → `game.game_id`).
 - `ix_odds_snapshot_fetched_at` on `fetched_at` — used when slicing odds history by time window for sparkline queries.
 
 ---
@@ -92,13 +92,13 @@ updated in place when the model re-computes.
 
 | Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
 |--------|----------------|-------------|-------------|-------------|
-| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, **FOREIGN KEY** → `game.id` | The game this fair-value estimate belongs to |
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, **FOREIGN KEY** → `game.game_id` | The game this fair-value estimate belongs to |
 | `away_fair` | `Float` | `REAL` | — | Model's estimated win probability for the away team (0–1) |
 | `home_fair` | `Float` | `REAL` | — | Model's estimated win probability for the home team (0–1) |
 | `computed_at` | `DateTime` | `DATETIME` | — | UTC timestamp when the fair-value was last computed |
 
 **Foreign Keys:**
-- `game_id` → `game.id` — the primary key is also a foreign key; this enforces a strict one-to-one relationship between a game and its fair-value estimate.
+- `game_id` → `game.game_id` — the primary key is also a foreign key; this enforces a strict one-to-one relationship between a game and its fair-value estimate.
 
 **Indices:** Primary key index on `game_id`.
 
@@ -109,9 +109,9 @@ updated in place when the model re-computes.
 ```
 team (code PK)
   ↑ FK (away_code)
-  game (id PK) ←── FK (game_id) ── odds_snapshot (id PK)
+  game (game_id PK) ←── FK (game_id) ── odds_snapshot (id PK)
   ↑ FK (home_code)                  
-  team (code PK)    game (id PK) ←── FK (game_id, PK) ── model_fair
+  team (code PK)    game (game_id PK) ←── FK (game_id, PK) ── model_fair
 ```
 
 - Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.tri_code`.

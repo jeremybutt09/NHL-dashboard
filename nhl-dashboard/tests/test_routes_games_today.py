@@ -17,8 +17,8 @@ class TestGamesTodayPopulated:
             'TOR', 'BOS',
             status='live', away_score=2, home_score=1, period='2', clock='10:00',
         )
-        odds_snapshot_factory(self.game.id, away_ml=-110, home_ml=100)
-        model_fair_factory(self.game.id, home_fair=55.0, away_fair=45.0)
+        odds_snapshot_factory(self.game.game_id, away_ml=-110, home_ml=100)
+        model_fair_factory(self.game.game_id, home_fair=55.0, away_fair=45.0)
 
     def test_games_today_returns_200(self, client):
         assert client.get('/api/games/today').status_code == 200
@@ -36,8 +36,14 @@ class TestGamesTodayPopulated:
 
     def test_games_today_game_has_required_fields(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
-        for field in ('id', 'away', 'home', 'status', 'ml', 'fair', 'edge', 'movement_24h'):
+        for field in ('game_id', 'away', 'home', 'status', 'ml', 'fair', 'edge', 'movement_24h'):
             assert field in game, f"Missing field: {field}"
+
+    def test_games_today_game_id_key_not_id(self, client):
+        """Response uses 'game_id' key; the bare 'id' key must not be present."""
+        game = client.get('/api/games/today').get_json()['games'][0]
+        assert 'game_id' in game
+        assert 'id' not in game
 
     def test_games_today_game_has_correct_team_codes(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
@@ -100,11 +106,11 @@ class TestGamesTodayPopulated:
         t1 = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
         t2 = datetime(2026, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
         snap1 = OddsSnapshot(
-            game_id=self.game.id, fetched_at=t1, book='test',
+            game_id=self.game.game_id, fetched_at=t1, book='test',
             away_ml=-120, home_ml=110, away_implied=45.0, home_implied=55.0,
         )
         snap2 = OddsSnapshot(
-            game_id=self.game.id, fetched_at=t2, book='test',
+            game_id=self.game.game_id, fetched_at=t2, book='test',
             away_ml=-130, home_ml=120, away_implied=60.0, home_implied=40.0,
         )
         db.session.add_all([snap1, snap2])

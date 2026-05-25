@@ -114,7 +114,7 @@ def odds_snapshot_factory(db):
     """Factory that creates and commits an OddsSnapshot row.
 
     Args:
-        game_id: FK to Game.id.
+        game_id: FK to Game.game_id.
         away_ml: Away moneyline in American odds format, defaults to ``-110``.
         home_ml: Home moneyline in American odds format, defaults to ``+100``.
         book: Book identifier string, defaults to ``"consensus"``.
@@ -144,7 +144,7 @@ def model_fair_factory(db):
     """Factory that creates and commits a ModelFair row.
 
     Args:
-        game_id: FK to Game.id.
+        game_id: FK to Game.game_id.
         home_fair: Home win probability in percentage points (0–100), defaults to ``55.0``.
         away_fair: Away win probability in percentage points (0–100), defaults to ``45.0``.
 
