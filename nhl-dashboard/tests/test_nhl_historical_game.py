@@ -1,10 +1,48 @@
-"""Tests for NhlHistoricalGame model and ingest_historical_games() (Issue #121)."""
+"""Tests for NhlHistoricalGame model, ingest_historical_games(), and
+refresh_recent_historical_games() (Issues #121, #122)."""
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
 
 from models import NhlHistoricalGame
+
+# Dynamic dates so tests remain valid over time
+_RECENT_DATE = (date.today() - timedelta(days=5)).isoformat()   # within 30-day window
+_OLD_DATE = (date.today() - timedelta(days=40)).isoformat()     # outside 30-day window
+
+_RECENT_GAME = {
+    "id": 2026020100,
+    "easternStartTime": "07:30 PM",
+    "gameDate": _RECENT_DATE,
+    "gameNumber": 100,
+    "gameScheduleStateId": 1,
+    "gameStateId": 7,
+    "gameType": 2,
+    "homeScore": 3,
+    "homeTeamId": 10,
+    "period": 3,
+    "season": 20252026,
+    "visitingScore": 2,
+    "visitingTeamId": 15,
+}
+
+_OLD_GAME = {
+    "id": 2025010001,
+    "easternStartTime": "07:00 PM",
+    "gameDate": _OLD_DATE,
+    "gameNumber": 1,
+    "gameScheduleStateId": 1,
+    "gameStateId": 7,
+    "gameType": 2,
+    "homeScore": 2,
+    "homeTeamId": 5,
+    "period": 3,
+    "season": 20242025,
+    "visitingScore": 1,
+    "visitingTeamId": 8,
+}
 
 
 # ── Sample API data ───────────────────────────────────────────────────────────
@@ -203,3 +241,100 @@ class TestIngestHistoricalGames:
         assert row.home_score == 99
         all_rows = db.session.scalars(select(NhlHistoricalGame)).all()
         assert len(all_rows) == 1
+
+
+# ── refresh_recent_historical_games ──────────────────────────────────────────
+
+class TestRefreshRecentHistoricalGames:
+    def test_refresh_recent_returns_count_of_recent_games_only(self, db):
+        """refresh_recent_historical_games() returns count of games within the 30-day window."""
+        with patch("nhl_client.get_all_games", return_value=[_RECENT_GAME, _OLD_GAME]):
+            from services.historical import refresh_recent_historical_games
+            count = refresh_recent_historical_games()
+
+        assert count == 1  # only the recent game qualifies
+
+    def test_refresh_recent_inserts_new_game_within_window(self, db):
+        """refresh_recent_historical_games() inserts a game whose date is within 30 days."""
+        with patch("nhl_client.get_all_games", return_value=[_RECENT_GAME]):
+            from services.historical import refresh_recent_historical_games
+            refresh_recent_historical_games()
+
+        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        assert row is not None
+        assert row.game_date == _RECENT_DATE
+        assert row.home_score == 3
+
+    def test_refresh_recent_updates_changed_field_within_window(self, db):
+        """refresh_recent_historical_games() updates a changed field for a game in the window."""
+        db.session.add(NhlHistoricalGame(
+            game_id=_RECENT_GAME["id"],
+            game_date=_RECENT_DATE,
+            home_score=0,
+        ))
+        db.session.commit()
+
+        with patch("nhl_client.get_all_games", return_value=[_RECENT_GAME]):
+            from services.historical import refresh_recent_historical_games
+            refresh_recent_historical_games()
+
+        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        assert row.home_score == 3
+
+    def test_refresh_recent_does_not_touch_game_outside_window(self, db):
+        """refresh_recent_historical_games() leaves a game outside 30 days unchanged."""
+        db.session.add(NhlHistoricalGame(
+            game_id=_OLD_GAME["id"],
+            game_date=_OLD_DATE,
+            home_score=2,
+        ))
+        db.session.commit()
+
+        # API returns old game with a changed home_score
+        changed_old = dict(_OLD_GAME, homeScore=99)
+        with patch("nhl_client.get_all_games", return_value=[changed_old]):
+            from services.historical import refresh_recent_historical_games
+            refresh_recent_historical_games()
+
+        row = db.session.get(NhlHistoricalGame, _OLD_GAME["id"])
+        assert row.home_score == 2  # untouched
+
+    def test_refresh_recent_idempotent_no_duplicates(self, db):
+        """Running refresh_recent_historical_games() twice produces exactly one row per game."""
+        with patch("nhl_client.get_all_games", return_value=[_RECENT_GAME]):
+            from services.historical import refresh_recent_historical_games
+            refresh_recent_historical_games()
+            refresh_recent_historical_games()
+
+        rows = db.session.scalars(
+            select(NhlHistoricalGame).where(
+                NhlHistoricalGame.game_id == _RECENT_GAME["id"]
+            )
+        ).all()
+        assert len(rows) == 1
+
+    def test_refresh_recent_empty_api_response_returns_zero(self, db):
+        """refresh_recent_historical_games() with an empty API response returns 0."""
+        with patch("nhl_client.get_all_games", return_value=[]):
+            from services.historical import refresh_recent_historical_games
+            count = refresh_recent_historical_games()
+
+        assert count == 0
+
+    def test_refresh_recent_unchanged_row_retains_original_value(self, db):
+        """refresh_recent_historical_games() leaves a row untouched when API data matches DB."""
+        db.session.add(NhlHistoricalGame(
+            game_id=_RECENT_GAME["id"],
+            game_date=_RECENT_DATE,
+            home_score=3,
+            season=20252026,
+        ))
+        db.session.commit()
+
+        with patch("nhl_client.get_all_games", return_value=[_RECENT_GAME]):
+            from services.historical import refresh_recent_historical_games
+            refresh_recent_historical_games()
+
+        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        assert row.home_score == 3
+        assert row.season == 20252026

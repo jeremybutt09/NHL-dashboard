@@ -49,6 +49,11 @@ def _prune_snapshots():
     prune_old_snapshots()
 
 
+def _refresh_historical():
+    from services.historical import refresh_recent_historical_games
+    refresh_recent_historical_games()
+
+
 def start_scheduler(app):
     global _scheduler, _app, last_poll_time
     _app = app
@@ -56,11 +61,13 @@ def start_scheduler(app):
 
     cfg = app.config
 
-    _scheduler.add_job(_with_ctx(_poll_schedule),   'interval', seconds=cfg['POLL_SCHEDULE_INTERVAL'], id='poll_schedule',  replace_existing=True)
-    _scheduler.add_job(_with_ctx(_poll_scores),    'interval', seconds=cfg['POLL_SCORE_INTERVAL'],   id='poll_scores',    replace_existing=True)
-    _scheduler.add_job(_with_ctx(_poll_odds),      'interval', seconds=cfg['POLL_ODDS_INTERVAL'],    id='poll_odds',      replace_existing=True)
-    _scheduler.add_job(_with_ctx(_compute_fair),   'interval', seconds=cfg['COMPUTE_FAIR_INTERVAL'], id='compute_fair',   replace_existing=True)
-    _scheduler.add_job(_with_ctx(_prune_snapshots),'interval', seconds=cfg['PRUNE_INTERVAL'],        id='prune',          replace_existing=True)
+    _scheduler.add_job(_with_ctx(_poll_schedule),      'interval', seconds=cfg['POLL_SCHEDULE_INTERVAL'], id='poll_schedule',         replace_existing=True)
+    _scheduler.add_job(_with_ctx(_poll_scores),        'interval', seconds=cfg['POLL_SCORE_INTERVAL'],   id='poll_scores',           replace_existing=True)
+    _scheduler.add_job(_with_ctx(_poll_odds),          'interval', seconds=cfg['POLL_ODDS_INTERVAL'],    id='poll_odds',             replace_existing=True)
+    _scheduler.add_job(_with_ctx(_compute_fair),       'interval', seconds=cfg['COMPUTE_FAIR_INTERVAL'], id='compute_fair',          replace_existing=True)
+    _scheduler.add_job(_with_ctx(_prune_snapshots),    'interval', seconds=cfg['PRUNE_INTERVAL'],        id='prune',                 replace_existing=True)
+    # Daily at 08:00 UTC — after overnight games have completed
+    _scheduler.add_job(_with_ctx(_refresh_historical), 'cron',     hour=8, minute=0,                    id='refresh_historical',    replace_existing=True)
 
     _scheduler.start()
 

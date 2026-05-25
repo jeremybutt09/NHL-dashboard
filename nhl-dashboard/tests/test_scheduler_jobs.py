@@ -556,3 +556,20 @@ class TestPollScoreIntervalConfig:
         with patch("services.scores.refresh_scores") as mock_refresh:
             sched._with_ctx(sched._poll_scores)()
         mock_refresh.assert_called_once()
+
+
+# ── daily historical refresh ──────────────────────────────────────────────────
+
+class TestDailyHistoricalRefresh:
+    def test_refresh_historical_function_exists_in_scheduler(self):
+        """scheduler._refresh_historical is defined and callable."""
+        import scheduler as sched
+        assert callable(getattr(sched, "_refresh_historical", None))
+
+    def test_refresh_historical_calls_refresh_recent_historical_games(self, app):
+        """_refresh_historical() delegates to services.historical.refresh_recent_historical_games."""
+        import scheduler as sched
+        sched._app = app
+        with patch("services.historical.refresh_recent_historical_games") as mock_fn:
+            sched._with_ctx(sched._refresh_historical)()
+        mock_fn.assert_called_once()
