@@ -1,5 +1,6 @@
-"""Tests for NhlHistoricalGame model, ingest_historical_games(), and
-refresh_recent_historical_games() (Issues #121, #122)."""
+"""Tests for NhlHistoricalGame model, ingest_historical_games(),
+refresh_recent_historical_games(), and backfill-historical CLI command
+(Issues #121, #122, #127)."""
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -338,3 +339,36 @@ class TestRefreshRecentHistoricalGames:
         row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
         assert row.home_score == 3
         assert row.season == 20252026
+
+
+# ── backfill-historical CLI command ──────────────────────────────────────────
+
+class TestBackfillHistoricalCommand:
+    def test_backfill_historical_command_inserts_rows_when_table_empty(self, app, db):
+        """backfill-historical CLI command populates nhl_historical_game from an empty table."""
+        assert db.session.scalars(select(NhlHistoricalGame)).all() == []
+
+        with patch("nhl_client.get_all_games", return_value=[_GAME_1, _GAME_2]):
+            result = app.test_cli_runner().invoke(args=["backfill-historical"])
+
+        assert result.exit_code == 0
+        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        assert len(rows) == 2
+
+    def test_backfill_historical_command_idempotent_no_duplicates(self, app, db):
+        """Running backfill-historical twice leaves exactly one row per game."""
+        runner = app.test_cli_runner()
+
+        with patch("nhl_client.get_all_games", return_value=[_GAME_1]):
+            runner.invoke(args=["backfill-historical"])
+            runner.invoke(args=["backfill-historical"])
+
+        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        assert len(rows) == 1
+
+    def test_backfill_historical_command_echoes_count(self, app, db):
+        """backfill-historical prints the number of rows backfilled to stdout."""
+        with patch("nhl_client.get_all_games", return_value=[_GAME_1, _GAME_2]):
+            result = app.test_cli_runner().invoke(args=["backfill-historical"])
+
+        assert "2" in result.output

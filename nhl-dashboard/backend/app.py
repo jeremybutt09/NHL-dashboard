@@ -76,6 +76,14 @@ def create_app(config_class=Config, test_config=None):
         from scheduler import start_scheduler
         start_scheduler(app)
 
+    @app.cli.command("backfill-historical")
+    def backfill_historical_cmd():
+        """One-time backfill: upsert all available NHL historical games into nhl_historical_game."""
+        import click
+        from services.historical import ingest_historical_games
+        count = ingest_historical_games()
+        click.echo(f"Backfilled {count} historical games.")
+
     return app
 
 
