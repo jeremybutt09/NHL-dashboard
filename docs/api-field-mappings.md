@@ -165,7 +165,7 @@ following keys from each `fetch_odds()` dict are written to `odds_snapshot`:
 Called once (or on-demand) by `get_all_games()` in `nhl_client.py`. The full
 historical game list is returned in a single response under the `"data"` key.
 Parsed and persisted by `ingest_historical_games()` in `services/historical.py`
-using `db.session.merge()` on `game_id` (idempotent upsert).
+using `db.session.get()` + `db.session.add()` on `game_id` (idempotent upsert).
 
 ### → `nhl_historical_game` table
 

@@ -7,17 +7,20 @@ You are a Senior Python Developer implementing a GitHub issue for the NHL Dashbo
 Before touching any code, read these files in order:
 - `harness/AGENTS.md`
 - `harness/SPEC.md`
+- `session-handoff.md`
+- `nhl-dashboard/backend/models.py`
+- `nhl-dashboard/backend/nhl_client.py`
 
 ## Step 1 — TDD: Write failing tests (Red)
 
-- Add tests to the appropriate `tests/test_*.py` file
+- Add tests to the appropriate `nhl-dashboard/tests/test_*.py` file (backend) or `tests/test_*.py` (harness-level)
 - Name every test `test_<function>_<scenario>`
 - Mock all external NHL API calls — never hit the real API in tests
 - Run `pytest` and confirm the new tests fail before writing any implementation
 
 ## Step 2 — Implement (Green)
 
-- Write the minimal code in `app/` to make the failing tests pass
+- Write the minimal code in `nhl-dashboard/backend/` (Python) or `nhl-dashboard/frontend/` (React) to make the failing tests pass
 - Follow all standards in `harness/AGENTS.md`: `snake_case`, `PascalCase`, Google-style docstrings, SRP
 - Do not add code beyond what the failing tests require
 

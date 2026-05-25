@@ -237,7 +237,6 @@ Thumbs.db
 # Claude Code issue-processing state
 .claude-issues-progress
 logs/issues/
-RESUME-GUIDE.md
 
 # Personal Claude Code settings (harness-engineer-specific, not shared)
 .claude/settings.local.json

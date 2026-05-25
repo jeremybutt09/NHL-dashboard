@@ -113,6 +113,19 @@ Every public-facing page must include responsible gambling language (e.g., "Gamb
 
 ---
 
+## Definition of Done ✅
+
+Every issue is complete only when **all** of the following are true:
+
+- [ ] All new tests pass (`pytest tests/` green, zero regressions)
+- [ ] Each acceptance criterion from the issue is verified
+- [ ] Commit follows the format `<description> (Issue #N)\n\nCloses #N`
+- [ ] Changes pushed to GitHub (`git push`)
+- [ ] Issue closed on GitHub (`gh issue close N`)
+- [ ] `session-handoff.md` updated if MVP status or known blockers changed
+
+---
+
 ## Workflow 🔄
 
 - Keep data-fetching logic modular — one module per data concern (NHL API, odds API, each sport).
