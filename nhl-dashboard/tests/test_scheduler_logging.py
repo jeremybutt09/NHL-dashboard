@@ -23,65 +23,65 @@ def _set_app(app):
 # ── successful run emits INFO ─────────────────────────────────────────────────
 
 class TestPollSlateSuccessLog:
-    def test_poll_slate_success_emits_info_log(self, app, caplog):
-        """_with_ctx(_poll_slate) emits at least one INFO record on success."""
+    def test_poll_schedule_success_emits_info_log(self, app, caplog):
+        """_with_ctx(_poll_schedule) emits at least one INFO record on success."""
         _set_app(app)
-        with patch("services.slate.refresh_slate"):
+        with patch("services.slate.refresh_schedule"):
             with caplog.at_level(logging.INFO, logger="scheduler"):
-                sched._with_ctx(sched._poll_slate)()
+                sched._with_ctx(sched._poll_schedule)()
 
         assert any(r.levelno == logging.INFO for r in caplog.records)
 
-    def test_poll_slate_success_log_contains_job_name(self, app, caplog):
+    def test_poll_schedule_success_log_contains_job_name(self, app, caplog):
         """INFO record from a successful run references the job function name."""
         _set_app(app)
-        with patch("services.slate.refresh_slate"):
+        with patch("services.slate.refresh_schedule"):
             with caplog.at_level(logging.INFO, logger="scheduler"):
-                sched._with_ctx(sched._poll_slate)()
+                sched._with_ctx(sched._poll_schedule)()
 
         info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
-        assert any("_poll_slate" in m or "poll_slate" in m for m in info_messages)
+        assert any("_poll_schedule" in m or "poll_schedule" in m for m in info_messages)
 
 
 # ── failed run emits ERROR with traceback ────────────────────────────────────
 
 class TestPollSlateErrorLog:
-    def test_poll_slate_exception_emits_error_log(self, app, caplog):
-        """_with_ctx(_poll_slate) emits an ERROR record when refresh_slate raises."""
+    def test_poll_schedule_exception_emits_error_log(self, app, caplog):
+        """_with_ctx(_poll_schedule) emits an ERROR record when refresh_schedule raises."""
         _set_app(app)
-        with patch("services.slate.refresh_slate", side_effect=RuntimeError("nhl api down")):
+        with patch("services.slate.refresh_schedule", side_effect=RuntimeError("nhl api down")):
             with caplog.at_level(logging.ERROR, logger="scheduler"):
-                sched._with_ctx(sched._poll_slate)()
+                sched._with_ctx(sched._poll_schedule)()
 
         assert any(r.levelno == logging.ERROR for r in caplog.records)
 
-    def test_poll_slate_exception_log_contains_job_name(self, app, caplog):
+    def test_poll_schedule_exception_log_contains_job_name(self, app, caplog):
         """ERROR record references the failing job function name."""
         _set_app(app)
-        with patch("services.slate.refresh_slate", side_effect=RuntimeError("nhl api down")):
+        with patch("services.slate.refresh_schedule", side_effect=RuntimeError("nhl api down")):
             with caplog.at_level(logging.ERROR, logger="scheduler"):
-                sched._with_ctx(sched._poll_slate)()
+                sched._with_ctx(sched._poll_schedule)()
 
         error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
-        assert any("_poll_slate" in r.message or "poll_slate" in r.message for r in error_records)
+        assert any("_poll_schedule" in r.message or "poll_schedule" in r.message for r in error_records)
 
-    def test_poll_slate_exception_includes_exc_info(self, app, caplog):
+    def test_poll_schedule_exception_includes_exc_info(self, app, caplog):
         """ERROR log record carries exc_info so the traceback is present."""
         _set_app(app)
-        with patch("services.slate.refresh_slate", side_effect=RuntimeError("nhl api down")):
+        with patch("services.slate.refresh_schedule", side_effect=RuntimeError("nhl api down")):
             with caplog.at_level(logging.ERROR, logger="scheduler"):
-                sched._with_ctx(sched._poll_slate)()
+                sched._with_ctx(sched._poll_schedule)()
 
         error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert error_records, "No ERROR records emitted"
         assert error_records[0].exc_info is not None, "exc_info (traceback) missing from ERROR record"
 
-    def test_poll_slate_exception_does_not_propagate(self, app):
+    def test_poll_schedule_exception_does_not_propagate(self, app):
         """Exception inside the job must be swallowed — the wrapper should not re-raise."""
         _set_app(app)
-        with patch("services.slate.refresh_slate", side_effect=RuntimeError("nhl api down")):
+        with patch("services.slate.refresh_schedule", side_effect=RuntimeError("nhl api down")):
             # Should not raise
-            sched._with_ctx(sched._poll_slate)()
+            sched._with_ctx(sched._poll_schedule)()
 
 
 # ── log level is configurable ─────────────────────────────────────────────────

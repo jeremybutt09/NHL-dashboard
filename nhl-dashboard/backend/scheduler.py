@@ -24,9 +24,9 @@ def _with_ctx(fn):
     return wrapper
 
 
-def _poll_slate():
-    from services.slate import refresh_slate
-    refresh_slate()
+def _poll_schedule():
+    from services.slate import refresh_schedule
+    refresh_schedule()
 
 
 def _poll_live():
@@ -56,7 +56,7 @@ def start_scheduler(app):
 
     cfg = app.config
 
-    _scheduler.add_job(_with_ctx(_poll_slate),     'interval', seconds=cfg['POLL_SLATE_INTERVAL'],   id='poll_slate',  replace_existing=True)
+    _scheduler.add_job(_with_ctx(_poll_schedule),   'interval', seconds=cfg['POLL_SCHEDULE_INTERVAL'], id='poll_schedule', replace_existing=True)
     _scheduler.add_job(_with_ctx(_poll_live),      'interval', seconds=cfg['POLL_LIVE_INTERVAL'],    id='poll_live',   replace_existing=True)
     _scheduler.add_job(_with_ctx(_poll_odds),      'interval', seconds=cfg['POLL_ODDS_INTERVAL'],    id='poll_odds',   replace_existing=True)
     _scheduler.add_job(_with_ctx(_compute_fair),   'interval', seconds=cfg['COMPUTE_FAIR_INTERVAL'], id='compute_fair',replace_existing=True)
@@ -68,7 +68,7 @@ def start_scheduler(app):
     with app.app_context():
         from services.seed import seed_teams
         seed_teams()
-        _poll_slate()
+        _poll_schedule()
         _poll_odds()
         _compute_fair()
     last_poll_time = datetime.now(timezone.utc)

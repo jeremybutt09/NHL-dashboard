@@ -35,6 +35,15 @@ the stats-API seeding job (Issue #112) and is NULL until that job runs.
 
 Stores one row per NHL game. Updated in place during each poll cycle.
 
+**Endpoint responsibilities** (Issue #116):
+
+| Field group | Populated by | Endpoint |
+|-------------|-------------|---------|
+| `game_id`, `away_code`, `home_code`, `start_utc`, `venue`, `status` | `refresh_schedule()` | `GET /v1/schedule/now` |
+| `away_score`, `home_score`, `period`, `clock`, `away_sog`, `home_sog` | score poller (#117) | `GET /v1/score/now` |
+
+`refresh_schedule()` runs every `POLL_SCHEDULE_INTERVAL` seconds (default: 300 s) and immediately at startup. It seeds game rows so the score poller has rows to update. Score fields are intentionally left at their default (0) by the schedule job.
+
 | Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
 |--------|----------------|-------------|-------------|-------------|
 | `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | NHL game ID (`gamePk`) from the public NHL API |

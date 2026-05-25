@@ -25,44 +25,44 @@ def _fixture(name: str) -> dict:
 # ── poll_slate ────────────────────────────────────────────────────────────────
 
 class TestPollSlate:
-    def test_refresh_slate_upserts_game_rows(self, db):
-        """refresh_slate() with a 2-game schedule fixture upserts exactly 2 Game rows."""
+    def test_refresh_schedule_upserts_game_rows(self, db):
+        """refresh_schedule() with a 2-game schedule fixture upserts exactly 2 Game rows."""
         data = _fixture("schedule_now.json")
         with patch("nhl_client.get_schedule_now", return_value=data):
-            from services.slate import refresh_slate
-            refresh_slate()
+            from services.slate import refresh_schedule
+            refresh_schedule()
 
         games = db.session.scalars(select(Game)).all()
         assert len(games) == 2
 
-    def test_refresh_slate_upserts_referenced_team_rows(self, db):
-        """refresh_slate() creates Team rows for all teams referenced by the fixture games."""
+    def test_refresh_schedule_upserts_referenced_team_rows(self, db):
+        """refresh_schedule() creates Team rows for all teams referenced by the fixture games."""
         data = _fixture("schedule_now.json")
         with patch("nhl_client.get_schedule_now", return_value=data):
-            from services.slate import refresh_slate
-            refresh_slate()
+            from services.slate import refresh_schedule
+            refresh_schedule()
 
         team_codes = {t.tri_code for t in db.session.scalars(select(Team)).all()}
         assert {"STL", "ANA", "LAK", "SJS"}.issubset(team_codes)
 
-    def test_refresh_slate_idempotent_no_duplicate_game_rows(self, db):
-        """Calling refresh_slate() twice with identical data does not duplicate Game rows."""
+    def test_refresh_schedule_idempotent_no_duplicate_game_rows(self, db):
+        """Calling refresh_schedule() twice with identical data does not duplicate Game rows."""
         data = _fixture("schedule_now.json")
         with patch("nhl_client.get_schedule_now", return_value=data):
-            from services.slate import refresh_slate
-            refresh_slate()
-            refresh_slate()
+            from services.slate import refresh_schedule
+            refresh_schedule()
+            refresh_schedule()
 
         games = db.session.scalars(select(Game)).all()
         assert len(games) == 2
 
-    def test_refresh_slate_idempotent_no_duplicate_team_rows(self, db):
-        """Calling refresh_slate() twice with identical data does not duplicate Team rows."""
+    def test_refresh_schedule_idempotent_no_duplicate_team_rows(self, db):
+        """Calling refresh_schedule() twice with identical data does not duplicate Team rows."""
         data = _fixture("schedule_now.json")
         with patch("nhl_client.get_schedule_now", return_value=data):
-            from services.slate import refresh_slate
-            refresh_slate()
-            refresh_slate()
+            from services.slate import refresh_schedule
+            refresh_schedule()
+            refresh_schedule()
 
         teams = db.session.scalars(select(Team)).all()
         # Fixture contains exactly 4 distinct teams: STL, ANA, LAK, SJS

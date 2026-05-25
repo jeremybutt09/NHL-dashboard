@@ -77,6 +77,110 @@ def _ensure_team(tri_code: str, score_now_obj: dict, all_teams: list) -> None:
     db.session.add(team)
 
 
+def refresh_schedule():
+    """Pull today's schedule from /v1/schedule/now and upsert game metadata rows.
+
+    Writes game_id, away_code, home_code, start_utc, venue, and status only.
+    Score fields (away_score, home_score) are intentionally omitted; those are
+    updated by the score poller (#117).  Inline odds from the schedule payload
+    are captured as OddsSnapshot rows when present.
+    """
+    from nhl_client import get_schedule_now, get_all_teams
+
+    try:
+        data = get_schedule_now()
+    except Exception as e:
+        logger.error("[schedule] NHL API error: %s", e)
+        return
+
+    try:
+        all_teams = get_all_teams()
+    except Exception as e:
+        logger.error(
+            "[schedule] Could not fetch teams for auto-append; unknown teams will get minimal rows: %s", e
+        )
+        all_teams = []
+
+    game_weeks = data.get('gameWeek', [])
+    if not game_weeks:
+        return
+
+    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    today_block = next((w for w in game_weeks if w.get('date') == today_str), None)
+    if not today_block:
+        today_block = game_weeks[0] if game_weeks else None
+    if not today_block:
+        return
+
+    games = today_block.get('games', [])
+    now = datetime.now(timezone.utc)
+
+    for g in games:
+        game_id = g.get('id')
+        if not game_id:
+            continue
+
+        away_obj = g.get('awayTeam', {})
+        home_obj = g.get('homeTeam', {})
+        away_abbrev = away_obj.get('abbrev', '???')
+        home_abbrev = home_obj.get('abbrev', '???')
+
+        for abbrev, obj in [(away_abbrev, away_obj), (home_abbrev, home_obj)]:
+            _ensure_team(abbrev, obj, all_teams)
+
+        start_raw = g.get('startTimeUTC', '')
+        try:
+            start_utc = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+        except Exception:
+            start_utc = now
+
+        game_state = g.get('gameState', 'FUT')
+        if game_state in ('LIVE', 'CRIT'):
+            status = 'live'
+        elif game_state in ('FINAL', 'OFF'):
+            status = 'final'
+        else:
+            status = 'scheduled'
+
+        row = db.session.get(Game, game_id)
+        if row is None:
+            row = Game(game_id=game_id)
+            db.session.add(row)
+
+        row.start_utc  = start_utc
+        row.venue      = g.get('venue', {}).get('default', '') if isinstance(g.get('venue'), dict) else g.get('venue', '')
+        row.away_code  = away_abbrev
+        row.home_code  = home_abbrev
+        row.status     = status
+        row.updated_at = now
+
+        # Inline odds from NHL schedule API — insert snapshot if present
+        away_ml = _parse_american_odds(away_obj)
+        home_ml = _parse_american_odds(home_obj)
+        if away_ml and home_ml:
+            from sqlalchemy import select
+            recent = db.session.scalars(
+                select(OddsSnapshot)
+                .where(OddsSnapshot.game_id == game_id)
+                .order_by(OddsSnapshot.fetched_at.desc())
+                .limit(1)
+            ).first()
+            if recent is None or (now - recent.fetched_at.replace(tzinfo=timezone.utc)).total_seconds() > 180:
+                snap = OddsSnapshot(
+                    game_id      = game_id,
+                    fetched_at   = now,
+                    book         = 'consensus',
+                    away_ml      = away_ml,
+                    home_ml      = home_ml,
+                    away_implied = american_to_implied(away_ml),
+                    home_implied = american_to_implied(home_ml),
+                )
+                db.session.add(snap)
+
+    db.session.commit()
+    logger.info('[schedule] Upserted %d games for %s', len(games), today_str)
+
+
 def refresh_slate():
     """Pull today's schedule from NHL API and upsert Game rows."""
     from nhl_client import get_schedule_now, get_all_teams
