@@ -1,10 +1,10 @@
-"""Notebook SQL query validation tests for Issues #114 and #120.
+"""Notebook SQL query validation tests for Issues #114, #120, and #124.
 
 Verifies that the SQL queries used in db_explorer.ipynb work correctly
 against the database schema.
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
@@ -474,3 +474,60 @@ class TestCrossSourceComparisonQuery:
             )
         )
         assert result.fetchall() == []
+
+
+# ── Issue #124: Section 3 timezone mismatch and wrong column name ─────────────
+
+
+def _parse_utc_naive(ts):
+    """Replicate the _parse_utc logic from cell c03 (must return tz-naive datetime)."""
+    if ts is None:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return dt.replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+class TestSection3ParseUtc:
+    """Verifies _parse_utc strips tzinfo so tz-naive pandas columns compare cleanly."""
+
+    def test_parse_utc_returns_naive_datetime_from_utc_string(self):
+        """_parse_utc strips tzinfo — result must be tz-naive."""
+        result = _parse_utc_naive("2026-05-25T23:00:00+00:00")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parse_utc_returns_naive_datetime_from_z_suffix(self):
+        """_parse_utc handles Z-suffix ISO strings and strips tzinfo."""
+        result = _parse_utc_naive("2026-05-25T23:00:00Z")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parse_utc_returns_none_for_none_input(self):
+        """_parse_utc returns None when given None (no crash on NULL DB values)."""
+        assert _parse_utc_naive(None) is None
+
+    def test_parse_utc_compares_to_naive_stale_threshold_without_typeerror(self):
+        """Comparing _parse_utc result against a tz-naive threshold must not raise."""
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        stale_threshold = now_naive - timedelta(minutes=10)
+        ts = "2026-05-25T22:00:00+00:00"
+        parsed = _parse_utc_naive(ts)
+        # This comparison must not raise TypeError
+        assert isinstance(parsed < stale_threshold, bool)
+
+
+class TestSection3NotebookContent:
+    """Verifies the notebook source uses correct column name and tz-stripping fix."""
+
+    def test_notebook_section3_uses_game_id_in_display_calls(self):
+        """Cell c03 stale-game display must reference game_id, not bare 'id'."""
+        src = _notebook_source()
+        assert '"game_id"' in src
+
+    def test_notebook_section3_parse_utc_strips_tzinfo(self):
+        """Cell c03 _parse_utc body must call replace(tzinfo=None) to strip tz-awareness."""
+        src = _notebook_source()
+        assert "replace(tzinfo=None)" in src
