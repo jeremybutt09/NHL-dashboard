@@ -38,6 +38,17 @@ def get_boxscore(game_id: int) -> dict:
     return _get(f'/gamecenter/{game_id}/boxscore')
 
 
+def get_score_now() -> dict:
+    """Today's scores for all games: GET /v1/score/now
+
+    Returns:
+        Dict with keys ``currentDate`` (str) and ``games`` (list of game dicts).
+        Each game dict contains ``id``, ``gameState``, ``periodDescriptor``,
+        ``clock``, ``awayTeam``, and ``homeTeam``.
+    """
+    return _get('/score/now')
+
+
 def get_all_teams() -> list[dict]:
     """All NHL franchises: GET https://api.nhle.com/stats/rest/en/team
 

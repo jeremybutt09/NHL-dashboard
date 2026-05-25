@@ -1,0 +1,29 @@
+{
+  "currentDate": "2026-05-24",
+  "games": [
+    {
+      "id": 2026030201,
+      "gameState": "LIVE",
+      "periodDescriptor": {"number": 2, "periodType": "REG"},
+      "clock": {"timeRemaining": "14:22"},
+      "awayTeam": {"abbrev": "EDM", "score": 1, "sog": 12},
+      "homeTeam": {"abbrev": "FLA", "score": 2, "sog": 15}
+    },
+    {
+      "id": 2026030202,
+      "gameState": "FUT",
+      "periodDescriptor": {"number": 1, "periodType": "REG"},
+      "clock": {"timeRemaining": "20:00"},
+      "awayTeam": {"abbrev": "DAL", "score": 0, "sog": 0},
+      "homeTeam": {"abbrev": "VGK", "score": 0, "sog": 0}
+    },
+    {
+      "id": 2026030203,
+      "gameState": "FINAL",
+      "periodDescriptor": {"number": 3, "periodType": "REG"},
+      "clock": {"timeRemaining": "00:00"},
+      "awayTeam": {"abbrev": "NYR", "score": 3, "sog": 28},
+      "homeTeam": {"abbrev": "CAR", "score": 2, "sog": 25}
+    }
+  ]
+}
