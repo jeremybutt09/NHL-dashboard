@@ -72,6 +72,42 @@ class TestTeamModel:
         assert rows[0].name == "Leafs Updated"
 
 
+class TestGameModelStartEstAndGameDate:
+    def test_game_has_start_est_column(self, db, team_factory):
+        """Game.start_est stores a datetime representing Eastern Time."""
+        from zoneinfo import ZoneInfo
+        team_factory(code="TOR", name="Toronto Maple Leafs")
+        team_factory(code="BOS", name="Boston Bruins")
+        eastern = ZoneInfo("America/New_York")
+        est_dt = datetime(2026, 5, 24, 23, 0, 0, tzinfo=timezone.utc).astimezone(eastern)
+        game = Game(
+            away_code="TOR", home_code="BOS",
+            status="scheduled",
+            start_est=est_dt,
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(game)
+        db.session.commit()
+        retrieved = db.session.get(Game, game.game_id)
+        assert retrieved.start_est is not None
+
+    def test_game_has_game_date_column(self, db, team_factory):
+        """Game.game_date stores the API's gameDate string."""
+        team_factory(code="TOR", name="Toronto Maple Leafs")
+        team_factory(code="BOS", name="Boston Bruins")
+        game = Game(
+            away_code="TOR", home_code="BOS",
+            status="scheduled",
+            start_est=datetime.now(timezone.utc),
+            game_date="2026-05-24",
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(game)
+        db.session.commit()
+        retrieved = db.session.get(Game, game.game_id)
+        assert retrieved.game_date == "2026-05-24"
+
+
 class TestGameModel:
     def test_game_primary_key_attribute_is_game_id(self, db, team_factory, game_factory):
         """Game instance exposes game_id (not id) as its primary key attribute."""
@@ -111,7 +147,7 @@ class TestGameModel:
             away_code="XXX",
             home_code="YYY",
             status="scheduled",
-            start_utc=datetime.now(timezone.utc),
+            start_est=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
         db.session.add(game)

@@ -38,7 +38,7 @@ def test_team_table_mappings_present():
 def test_game_table_mappings_present():
     """game table column mappings must be documented."""
     text = _doc_text()
-    for col in ("game.id", "game.start_utc", "game.venue", "game.away_code",
+    for col in ("game.id", "game.start_est", "game.venue", "game.away_code",
                 "game.home_code", "game.status"):
         assert col in text, f"game.{col} mapping missing"
 

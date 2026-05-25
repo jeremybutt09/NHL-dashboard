@@ -3,6 +3,9 @@ Slate service: build today's game list, upsert from NHL API, return API response
 """
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+_EASTERN = ZoneInfo("America/New_York")
 
 from extensions import db
 from models import Game, NhlOddsLine, OddsSnapshot, ModelFair
@@ -80,7 +83,7 @@ def _ensure_team(tri_code: str, score_now_obj: dict, all_teams: list) -> None:
 def refresh_schedule():
     """Pull today's schedule from /v1/schedule/now and upsert game metadata rows.
 
-    Writes game_id, away_code, home_code, start_utc, venue, and status only.
+    Writes game_id, away_code, home_code, start_est, game_date, venue, and status only.
     Score fields (away_score, home_score) are intentionally omitted; those are
     updated by the score poller (#117).  Inline odds from the schedule payload
     are captured as OddsSnapshot rows when present.
@@ -130,9 +133,10 @@ def refresh_schedule():
 
         start_raw = g.get('startTimeUTC', '')
         try:
-            start_utc = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+            start_utc_dt = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+            start_est = start_utc_dt.astimezone(_EASTERN)
         except Exception:
-            start_utc = now
+            start_est = now.astimezone(_EASTERN)
 
         game_state = g.get('gameState', 'FUT')
         if game_state in ('LIVE', 'CRIT'):
@@ -147,7 +151,8 @@ def refresh_schedule():
             row = Game(game_id=game_id)
             db.session.add(row)
 
-        row.start_utc  = start_utc
+        row.start_est  = start_est
+        row.game_date  = g.get('gameDate')
         row.venue      = g.get('venue', {}).get('default', '') if isinstance(g.get('venue'), dict) else g.get('venue', '')
         row.away_code  = away_abbrev
         row.home_code  = home_abbrev
@@ -234,12 +239,13 @@ def refresh_slate():
             if team is not None and team.name == abbrev:
                 team.name = _team_name(obj)
 
-        # Parse start time
+        # Parse start time and convert to Eastern
         start_raw = g.get('startTimeUTC', '')
         try:
-            start_utc = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+            start_utc_dt = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+            start_est = start_utc_dt.astimezone(_EASTERN)
         except Exception:
-            start_utc = now
+            start_est = now.astimezone(_EASTERN)
 
         # Game status
         game_state = g.get('gameState', 'FUT')
@@ -255,7 +261,8 @@ def refresh_slate():
             row = Game(game_id=game_id)
             db.session.add(row)
 
-        row.start_utc  = start_utc
+        row.start_est  = start_est
+        row.game_date  = g.get('gameDate')
         row.venue      = g.get('venue', {}).get('default', '') if isinstance(g.get('venue'), dict) else g.get('venue', '')
         row.away_code  = away_abbrev
         row.home_code  = home_abbrev
@@ -357,7 +364,7 @@ def build_today_response() -> dict:
     now = datetime.now(timezone.utc)
 
     today_games = db.session.scalars(
-        select(Game).order_by(Game.start_utc)
+        select(Game).order_by(Game.start_est)
     ).all()
 
     return _build_from_db(today_games, now)
@@ -426,18 +433,21 @@ def _build_from_db(games: list, now: datetime) -> dict:
         # Venue may be a dict or string
         venue = g.venue or ''
 
-        start_iso = None
-        if g.start_utc:
-            dt = g.start_utc
+        start_est_iso = None
+        if g.start_est:
+            # start_est is stored tz-naive by SQLite; re-attach Eastern tzinfo for ISO output
+            dt = g.start_est
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            start_iso = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+                dt = dt.replace(tzinfo=_EASTERN)
+            start_est_iso = dt.isoformat()
 
         row = {
-            'game_id': g.game_id,
-            'away':  {'code': g.away_code, 'name': away_name, 'record': '', 'l10': ''},
-            'home':  {'code': g.home_code, 'name': home_name, 'record': '', 'l10': ''},
-            'start':  start_iso,
+            'game_id':    g.game_id,
+            'away':       {'code': g.away_code, 'name': away_name, 'record': '', 'l10': ''},
+            'home':       {'code': g.home_code, 'name': home_name, 'record': '', 'l10': ''},
+            'start':      start_est_iso,
+            'start_est':  start_est_iso,
+            'game_date':  g.game_date,
             'venue':  venue,
             'status': g.status,
             'live':   live_block,

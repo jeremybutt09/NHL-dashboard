@@ -42,7 +42,8 @@ One `Game` row is upserted per game in today's slate.
 | API JSON path | `game` column | Transform |
 |---|---|---|
 | `gameWeek[].games[].id` | `game.id` | None — integer game ID used as primary key |
-| `gameWeek[].games[].startTimeUTC` | `game.start_utc` | ISO 8601 string parsed via `datetime.fromisoformat()` with `Z` → `+00:00` substitution; `tzinfo` stripped before storage (stored as naive UTC `DATETIME`) |
+| `gameWeek[].games[].startTimeUTC` | `game.start_est` | ISO 8601 string parsed via `datetime.fromisoformat()`, then converted to `US/Eastern` via `zoneinfo`; stored as Eastern `DATETIME` |
+| `gameWeek[].games[].gameDate` | `game.game_date` | Stored verbatim as a `VARCHAR(10)` string (e.g. `"2025-01-15"`) — not derived from `start_est` |
 | `gameWeek[].games[].venue.default` | `game.venue` | None |
 | `gameWeek[].games[].awayTeam.abbrev` | `game.away_code` | None — FK → `team.tri_code` |
 | `gameWeek[].games[].homeTeam.abbrev` | `game.home_code` | None — FK → `team.tri_code` |

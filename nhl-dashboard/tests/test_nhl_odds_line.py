@@ -22,7 +22,7 @@ def _seed_game(db, game_id=2026030001):
     """Insert a Game row with a known game_id."""
     db.session.add(Game(
         game_id=game_id,
-        start_utc=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
+        start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
         status="scheduled",
     ))
     db.session.commit()

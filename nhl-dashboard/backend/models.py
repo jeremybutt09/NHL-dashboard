@@ -21,7 +21,8 @@ class Game(db.Model):
     __tablename__ = 'game'
 
     game_id     = db.Column(db.Integer, primary_key=True)   # NHL gamePk
-    start_utc   = db.Column(db.DateTime, index=True, nullable=False)
+    start_est   = db.Column(db.DateTime, index=True, nullable=False)
+    game_date   = db.Column(db.String(10))                               # API: gameDate e.g. "2025-01-15"
     venue       = db.Column(db.String(120))
     away_code   = db.Column(db.String(3), db.ForeignKey('team.tri_code'))
     home_code   = db.Column(db.String(3), db.ForeignKey('team.tri_code'))

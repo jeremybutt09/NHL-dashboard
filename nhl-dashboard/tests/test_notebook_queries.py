@@ -200,7 +200,7 @@ class TestNhlApiOddsLineQuery:
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel", country="CA"))
         db.session.add(Game(
             game_id=2026030001,
-            start_utc=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
+            start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
         ))
         db.session.commit()
@@ -281,7 +281,7 @@ class TestLatestOddsPerGameQuery:
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
         db.session.add(Game(
             game_id=2026030001,
-            start_utc=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
+            start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
         ))
         db.session.commit()
@@ -356,7 +356,7 @@ class TestCrossSourceComparisonQuery:
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
         db.session.add(Game(
             game_id=2026030001,
-            start_utc=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
+            start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
         ))
         db.session.commit()
@@ -407,7 +407,7 @@ class TestCrossSourceComparisonQuery:
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
         db.session.add(Game(
             game_id=2026030001,
-            start_utc=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
+            start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
         ))
         db.session.commit()

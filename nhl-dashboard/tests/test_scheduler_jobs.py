@@ -159,7 +159,7 @@ class TestPollOdds:
             away_code="TOR",
             home_code="BOS",
             status="scheduled",
-            start_utc=datetime.now(timezone.utc),
+            start_est=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
         db.session.add(game)
@@ -362,7 +362,7 @@ class TestPollScores:
             home_score=0,
             away_sog=0,
             home_sog=0,
-            start_utc=datetime.now(timezone.utc),
+            start_est=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
         db.session.add(game)

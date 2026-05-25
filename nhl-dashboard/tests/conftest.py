@@ -99,7 +99,7 @@ def game_factory(db):
             home_score=home_score,
             period=period,
             clock=clock,
-            start_utc=datetime.now(timezone.utc),
+            start_est=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
         db.session.add(game)

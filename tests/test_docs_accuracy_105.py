@@ -214,11 +214,11 @@ def test_testing_guide_status_example_lowercase():
 
 # ── database-schema.md + models.py ───────────────────────────────────────────
 
-def test_models_game_start_utc_nullable_false():
-    """game.start_utc is documented as NOT NULL; models.py must enforce nullable=False."""
+def test_models_game_start_est_nullable_false():
+    """game.start_est is NOT NULL; models.py must enforce nullable=False."""
     text = _read(_MODELS)
-    assert "start_utc" in text and "nullable=False" in text, \
-        "game.start_utc missing nullable=False in models.py"
+    assert "start_est" in text and "nullable=False" in text, \
+        "game.start_est missing nullable=False in models.py"
 
 
 def test_models_game_status_nullable_false():

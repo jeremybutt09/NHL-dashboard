@@ -101,6 +101,16 @@ class TestGamesTodayPopulated:
         assert live['away_score'] == 2
         assert live['home_score'] == 1
 
+    def test_games_today_game_has_start_est_field(self, client):
+        """Response includes start_est field with Eastern Time ISO string."""
+        game = client.get('/api/games/today').get_json()['games'][0]
+        assert 'start_est' in game
+
+    def test_games_today_game_has_game_date_field(self, client):
+        """Response includes game_date field from the API's gameDate."""
+        game = client.get('/api/games/today').get_json()['games'][0]
+        assert 'game_date' in game
+
     def test_games_today_sparkline_ordered_ascending(self, client, db):
         """Entries with earlier fetched_at timestamps appear before later ones."""
         t1 = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)

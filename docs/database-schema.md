@@ -39,7 +39,7 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 
 | Field group | Populated by | Endpoint |
 |-------------|-------------|---------|
-| `game_id`, `away_code`, `home_code`, `start_utc`, `venue`, `status` | `refresh_schedule()` | `GET /v1/schedule/now` |
+| `game_id`, `away_code`, `home_code`, `start_est`, `game_date`, `venue`, `status` | `refresh_schedule()` | `GET /v1/schedule/now` |
 | `away_score`, `home_score`, `period`, `clock`, `away_sog`, `home_sog` | score poller (#117) | `GET /v1/score/now` |
 
 `refresh_schedule()` runs every `POLL_SCHEDULE_INTERVAL` seconds (default: 300 s) and immediately at startup. It seeds game rows so the score poller has rows to update. Score fields are intentionally left at their default (0) by the schedule job.
@@ -47,7 +47,8 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 | Column | SQLAlchemy Type | SQLite Type | Constraints | Description |
 |--------|----------------|-------------|-------------|-------------|
 | `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | NHL game ID (`gamePk`) from the public NHL API |
-| `start_utc` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | Scheduled puck-drop time in UTC |
+| `start_est` | `DateTime` | `DATETIME` | NOT NULL, **INDEX** | Scheduled puck-drop time in US/Eastern |
+| `game_date` | `String(10)` | `VARCHAR(10)` | — | Calendar date string from API `gameDate` field (e.g. `"2025-01-15"`) |
 | `venue` | `String(120)` | `VARCHAR(120)` | — | Arena name (e.g. `TD Garden`) |
 | `away_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.tri_code` | Visiting team abbreviation |
 | `home_code` | `String(3)` | `VARCHAR(3)` | **FOREIGN KEY** → `team.tri_code` | Home team abbreviation |
@@ -65,7 +66,7 @@ Stores one row per NHL game. Updated in place during each poll cycle.
 - `home_code` → `team.tri_code` — links the home team to the `team` table.
 
 **Indices:**
-- `ix_game_start_utc` on `start_utc` — used by the games route to filter and sort today's slate efficiently.
+- `ix_game_start_est` on `start_est` — used by the games route to sort today's slate by puck-drop time.
 
 ---
 

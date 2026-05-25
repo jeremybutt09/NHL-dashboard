@@ -399,6 +399,85 @@ class TestRefreshSchedule:
         assert bos is not None
 
 
+_SCHEDULE_WITH_GAME_DATE = {
+    "gameWeek": [
+        {
+            "date": "2026-05-24",
+            "games": [
+                {
+                    "id": 2026010001,
+                    "startTimeUTC": "2026-05-24T23:00:00Z",
+                    "gameDate": "2026-05-24",
+                    "gameState": "FUT",
+                    "venue": {"default": "Scotiabank Arena"},
+                    "awayTeam": {
+                        "abbrev": "TOR",
+                        "placeName": {"default": "Toronto"},
+                        "commonName": {"default": "Maple Leafs"},
+                    },
+                    "homeTeam": {
+                        "abbrev": "BOS",
+                        "placeName": {"default": "Boston"},
+                        "commonName": {"default": "Bruins"},
+                    },
+                }
+            ],
+        }
+    ]
+}
+
+
+class TestStartEstAndGameDate:
+    def test_refresh_schedule_stores_start_est_as_eastern_time(self, db):
+        """refresh_schedule() converts startTimeUTC to Eastern and stores in start_est."""
+        from services.slate import refresh_schedule
+
+        with patch("nhl_client.get_schedule_now", return_value=_SCHEDULE_WITH_GAME_DATE), \
+             patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
+            refresh_schedule()
+
+        game = db.session.get(Game, 2026010001)
+        assert game is not None
+        assert game.start_est is not None
+        # 23:00 UTC on 2026-05-24 = 19:00 EDT (UTC-4 in May)
+        assert game.start_est.hour == 19
+
+    def test_refresh_schedule_stores_game_date_from_api(self, db):
+        """refresh_schedule() stores gameDate from the API payload directly."""
+        from services.slate import refresh_schedule
+
+        with patch("nhl_client.get_schedule_now", return_value=_SCHEDULE_WITH_GAME_DATE), \
+             patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
+            refresh_schedule()
+
+        game = db.session.get(Game, 2026010001)
+        assert game.game_date == "2026-05-24"
+
+    def test_refresh_slate_stores_start_est_as_eastern_time(self, db):
+        """refresh_slate() converts startTimeUTC to Eastern and stores in start_est."""
+        from services.slate import refresh_slate
+
+        with patch("nhl_client.get_schedule_now", return_value=_SCHEDULE_WITH_GAME_DATE), \
+             patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
+            refresh_slate()
+
+        game = db.session.get(Game, 2026010001)
+        assert game is not None
+        assert game.start_est is not None
+        assert game.start_est.hour == 19
+
+    def test_refresh_slate_stores_game_date_from_api(self, db):
+        """refresh_slate() stores gameDate from the API payload directly."""
+        from services.slate import refresh_slate
+
+        with patch("nhl_client.get_schedule_now", return_value=_SCHEDULE_WITH_GAME_DATE), \
+             patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
+            refresh_slate()
+
+        game = db.session.get(Game, 2026010001)
+        assert game.game_date == "2026-05-24"
+
+
 class TestPollScheduleConfig:
     def test_poll_schedule_interval_in_config(self, app):
         """POLL_SCHEDULE_INTERVAL is present in the Flask app config."""
