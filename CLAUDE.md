@@ -28,6 +28,10 @@ Closes #N
 
 `.claude/settings.json` pre-approves common low-risk tools (file reads/writes, pytest, safe git commands) so developers are not interrupted by repetitive permission prompts during normal work. Destructive operations (`rm -rf`, force-push, hard reset) are explicitly denied. Do not add blanket `Bash` approval to this file.
 
+## User stories
+
+Whenever a user story is created (via the `/user-story` skill or any other method), immediately upload it to GitHub as an issue using `gh issue create`. The issue body should contain the full user story text including acceptance criteria. Do not wait to be asked — creating the GitHub issue is the final step of every user story creation, without exception. These issues are intended to be completed later by an AI agent running `./scripts/process-issues.sh`.
+
 ## Automated issue processing
 
 To run all open GitHub issues sequentially through Claude Code (headless):
