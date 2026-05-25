@@ -113,16 +113,40 @@ updated in place when the model re-computes.
 
 ---
 
+### `nhl_odds_partner`
+
+Registry of NHL betting partners seeded from the `oddsPartners` array in `GET /v1/score/now`. One row per partner; upserted on every score refresh. Partners are relatively static — they change only when the NHL adds or removes a sportsbook relationship. This table is a prerequisite for `nhl_odds_line` (Issue #119), which holds a foreign key to `nhl_odds_partner.partner_id`.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `partner_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | `partnerId` | NHL's own integer identifier for the betting partner. Used as PK and FK join key for `nhl_odds_line` |
+| `country` | `String(2)` | `VARCHAR(2)` | — | `country` | Two-letter country code where this partner is active (e.g. `CA`, `US`) |
+| `name` | `String(64)` | `VARCHAR(64)` | NOT NULL | `name` | Display name of the betting partner (e.g. `FanDuel`) |
+| `image_url` | `String(255)` | `VARCHAR(255)` | — | `imageUrl` | URL to the partner's logo/image asset hosted on NHL CDN |
+| `site_url` | `String(512)` | `VARCHAR(512)` | — | `siteUrl` | Partner's website URL |
+| `bg_color` | `String(7)` | `VARCHAR(7)` | — | `bgColor` | Partner's background brand colour as a hex string (e.g. `#0078ff`) |
+| `text_color` | `String(7)` | `VARCHAR(7)` | — | `textColor` | Partner's text brand colour as a hex string (e.g. `#FFFFFF`) |
+| `accent_color` | `String(7)` | `VARCHAR(7)` | — | `accentColor` | Partner's accent brand colour as a hex string (e.g. `#FFFFFF`) |
+
+**Upsert strategy:** `db.session.merge()` on `partner_id` PK — idempotent and overwrites any changed metadata field on repeated runs. No pruning: partner rows are reference data, not time-series.
+
+**Indices:** Primary key index on `partner_id`.
+
+---
+
 ## Entity-Relationship Summary
 
 ```
-team (code PK)
+team (tri_code PK)
   ↑ FK (away_code)
   game (game_id PK) ←── FK (game_id) ── odds_snapshot (id PK)
-  ↑ FK (home_code)                  
-  team (code PK)    game (game_id PK) ←── FK (game_id, PK) ── model_fair
+  ↑ FK (home_code)
+  team (tri_code PK)  game (game_id PK) ←── FK (game_id, PK) ── model_fair
+
+nhl_odds_partner (partner_id PK)   [no FK to game; referenced by nhl_odds_line #119]
 ```
 
 - Each `game` references `team` **twice** (home and away). Both foreign keys point at `team.tri_code`.
 - `odds_snapshot` has a many-to-one relationship with `game`: many snapshots can exist per game (one per poll cycle per book).
 - `model_fair` has a one-to-one relationship with `game`: `game_id` is both the primary key and a foreign key, preventing duplicate fair-value rows for the same game.
+- `nhl_odds_partner` is a standalone reference table with no foreign keys of its own. It will be referenced by `nhl_odds_line` (Issue #119) via `partner_id`.

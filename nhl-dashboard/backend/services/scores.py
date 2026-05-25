@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from extensions import db
-from models import Game
+from models import Game, NhlOddsPartner
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,28 @@ def _update_game_from_score_data(game: Game, game_data: dict, now: datetime) -> 
     game.updated_at = now
 
 
+def _upsert_partners(partners_list: list) -> None:
+    """Upsert each entry from the oddsPartners array into nhl_odds_partner.
+
+    Args:
+        partners_list: List of partner dicts from the /v1/score/now response.
+            Each dict must contain 'partnerId' and 'name' at minimum.
+    """
+    for p in partners_list:
+        db.session.merge(NhlOddsPartner(
+            partner_id=p['partnerId'],
+            country=p.get('country'),
+            name=p['name'],
+            image_url=p.get('imageUrl'),
+            site_url=p.get('siteUrl'),
+            bg_color=p.get('bgColor'),
+            text_color=p.get('textColor'),
+            accent_color=p.get('accentColor'),
+        ))
+    if partners_list:
+        db.session.commit()
+
+
 def refresh_scores() -> None:
     """Fetch /v1/score/now and update all matched game rows in a single DB commit.
 
@@ -95,6 +117,8 @@ def refresh_scores() -> None:
     except Exception as exc:
         logger.error('[scores] API call to /v1/score/now failed: %s', exc)
         return
+
+    _upsert_partners(data.get('oddsPartners', []))
 
     api_games = data.get('games', [])
     if not api_games:

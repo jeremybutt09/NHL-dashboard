@@ -63,3 +63,20 @@ class ModelFair(db.Model):
     away_fair   = db.Column(db.Float)   # percentage points (0–100)
     home_fair   = db.Column(db.Float)   # percentage points (0–100)
     computed_at = db.Column(db.DateTime)
+
+
+class NhlOddsPartner(db.Model):
+    """Betting partner registry seeded from the oddsPartners array in /v1/score/now."""
+    __tablename__ = 'nhl_odds_partner'
+
+    partner_id   = db.Column(db.Integer, primary_key=True)   # NHL's partnerId — not auto-generated
+    country      = db.Column(db.String(2))
+    name         = db.Column(db.String(64), nullable=False)
+    image_url    = db.Column(db.String(255))
+    site_url     = db.Column(db.String(512))
+    bg_color     = db.Column(db.String(7))
+    text_color   = db.Column(db.String(7))
+    accent_color = db.Column(db.String(7))
+
+    def __repr__(self):
+        return f'<NhlOddsPartner {self.partner_id} {self.name!r}>'
