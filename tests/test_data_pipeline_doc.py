@@ -24,20 +24,45 @@ def test_data_flow_diagram_present():
 
 
 def test_all_five_jobs_documented():
-    """Each of the 5 scheduler job IDs must appear in the doc."""
+    """Current scheduler job IDs must appear in the doc."""
     text = _doc_text()
-    for job_id in ("poll_slate", "poll_live", "poll_odds", "compute_fair", "prune_snapshots"):
+    for job_id in ("poll_schedule", "poll_scores", "poll_odds", "compute_fair", "prune"):
         assert job_id in text, f"Job '{job_id}' missing from data pipeline doc"
+
+
+def test_refresh_boxscores_documented():
+    """refresh_boxscores job (Issue #133) must be documented in the pipeline."""
+    text = _doc_text()
+    assert "refresh_boxscores" in text, "refresh_boxscores job missing from data-pipeline.md"
+
+
+def test_refresh_dashboard_games_documented():
+    """refresh_dashboard_games job (Issue #134) must be documented in the pipeline."""
+    text = _doc_text()
+    assert "refresh_dashboard_games" in text, "refresh_dashboard_games job missing from data-pipeline.md"
+
+
+def test_poll_schedule_job_documented():
+    """poll_schedule job ID (replaced poll_slate) must appear in the doc."""
+    text = _doc_text()
+    assert "poll_schedule" in text, "poll_schedule job ID missing from data-pipeline.md"
+
+
+def test_boxscore_and_dashboard_game_tables_in_pipeline():
+    """boxscore and dashboard_game tables must appear in pipeline job descriptions."""
+    text = _doc_text().lower()
+    assert "boxscore" in text, "boxscore table not referenced in data-pipeline.md"
+    assert "dashboard_game" in text, "dashboard_game table not referenced in data-pipeline.md"
 
 
 def test_trigger_intervals_present():
     """Trigger intervals for all jobs must be mentioned."""
     text = _doc_text()
-    # poll_slate and poll_odds: 5 min; poll_live: 15 sec; prune_snapshots: 1 hour
+    # poll_schedule and poll_odds: 5 min; poll_scores: 30 sec; prune: 1 hour; boxscore: 60 sec
     assert "5 min" in text or "5-minute" in text or "5 minutes" in text, \
         "5-minute interval not documented"
-    assert "15 sec" in text or "15 seconds" in text or "15-second" in text, \
-        "15-second interval not documented"
+    assert "30 sec" in text or "30 seconds" in text or "30-second" in text, \
+        "30-second poll_scores interval not documented"
     assert "1 hour" in text or "hourly" in text, "Hourly interval not documented"
 
 

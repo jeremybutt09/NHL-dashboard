@@ -104,3 +104,10 @@ def test_games_today_edge_field_annotated():
     """Games/today section must annotate the edge field."""
     text = _doc_text()
     assert "edge" in text, "'edge' field not annotated in games/today section"
+
+
+def test_no_nhl_historical_game_reference():
+    """nhl_historical_game is a dropped name — must not appear in the response examples doc."""
+    text = _doc_text()
+    assert "nhl_historical_game" not in text, \
+        "Stale nhl_historical_game reference found in api-response-examples.md"

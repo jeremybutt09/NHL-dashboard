@@ -246,7 +246,7 @@ Values are percentage points (e.g. `45.38` means 45.38 %).
 
 Returns the full historical game set. Consumed by `get_all_games()` in
 `nhl_client.py` and persisted by `ingest_historical_games()` in
-`services/historical.py` into the `nhl_historical_game` table.
+`services/historical.py` into the `game` table (Issue #131).
 
 ### Response shape
 

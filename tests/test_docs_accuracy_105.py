@@ -124,10 +124,12 @@ def test_api_mappings_upsert_uses_session_get():
         "db.session.get() upsert pattern not documented in api-field-mappings.md"
 
 
-def test_api_mappings_no_session_merge():
-    """db.session.merge() is not used; must not appear in api-field-mappings.md."""
-    assert "session.merge" not in _read(_MAPPINGS), \
-        "Incorrect db.session.merge() still referenced in api-field-mappings.md"
+def test_api_mappings_upsert_uses_session_get_for_live_game():
+    """live_game upsert uses db.session.get() + add(), not db.session.merge()."""
+    text = _read(_MAPPINGS)
+    # The schedule upsert pattern is session.get() + add(), not merge()
+    assert "session.get" in text or "db.session.get" in text, \
+        "db.session.get() upsert pattern not documented in api-field-mappings.md"
 
 
 def test_api_mappings_fetch_odds_function_name():

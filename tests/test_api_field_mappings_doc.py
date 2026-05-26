@@ -36,19 +36,38 @@ def test_team_table_mappings_present():
 
 
 def test_game_table_mappings_present():
-    """game table column mappings must be documented."""
+    """live_game table column mappings must be documented (the live-score table)."""
     text = _doc_text()
-    for col in ("game.id", "game.start_est", "game.venue", "game.away_code",
-                "game.home_code", "game.status"):
-        assert col in text, f"game.{col} mapping missing"
+    for col in ("live_game.game_id", "live_game.start_est", "live_game.venue",
+                "live_game.away_code", "live_game.home_code", "live_game.status"):
+        assert col in text, f"{col} mapping missing from api-field-mappings.md"
 
 
 def test_live_update_fields_present():
-    """Live-update fields (period, clock, scores, sog) must be documented."""
+    """Live-update fields (period, clock, scores, sog) must be documented for live_game."""
     text = _doc_text()
-    for col in ("game.period", "game.clock", "game.away_score", "game.home_score",
-                "game.away_sog", "game.home_sog"):
-        assert col in text, f"{col} live-update mapping missing"
+    for col in ("live_game.period", "live_game.clock", "live_game.away_score",
+                "live_game.home_score", "live_game.away_sog", "live_game.home_sog"):
+        assert col in text, f"{col} live-update mapping missing from api-field-mappings.md"
+
+
+def test_live_game_table_documented():
+    """live_game table must appear in the api-field-mappings doc."""
+    text = _doc_text()
+    assert "live_game" in text, "live_game table not documented in api-field-mappings.md"
+
+
+def test_boxscore_table_field_mappings_present():
+    """boxscore table field mappings must be documented (Issue #133)."""
+    text = _doc_text()
+    assert "boxscore" in text.lower(), "boxscore table not documented in api-field-mappings.md"
+
+
+def test_no_nhl_historical_game_field_mapping_reference():
+    """nhl_historical_game is dropped — must not appear in field mappings doc."""
+    text = _doc_text()
+    assert "nhl_historical_game" not in text, \
+        "Stale nhl_historical_game reference in api-field-mappings.md (renamed to game in Issue #131)"
 
 
 def test_transformations_documented():
@@ -105,11 +124,11 @@ def test_scores_service_path_documented():
 
 
 def test_score_now_all_written_columns_documented():
-    """/v1/score/now field-mapping table must cover all columns refresh_scores() writes."""
+    """/v1/score/now field-mapping table must cover all live_game columns refresh_scores() writes."""
     text = _doc_text()
-    for col in ("game.status", "game.period", "game.clock",
-                "game.away_score", "game.home_score",
-                "game.away_sog", "game.home_sog"):
+    for col in ("live_game.status", "live_game.period", "live_game.clock",
+                "live_game.away_score", "live_game.home_score",
+                "live_game.away_sog", "live_game.home_sog"):
         assert col in text, f"{col} missing from /v1/score/now field-mapping table"
 
 
