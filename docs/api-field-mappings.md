@@ -6,9 +6,10 @@ by the API that are **not** consumed by the current implementation are listed in
 "Ignored / unused fields" sections at the end of each endpoint.
 
 Source files:
-- `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_boxscore()` (module-level functions, no class)
+- `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_score_now()`, `get_boxscore()` (module-level functions, no class)
 - `nhl-dashboard/backend/services/slate.py` — `refresh_slate()`
-- `nhl-dashboard/backend/services/live.py` — `refresh_live()`, `_update_from_boxscore()`
+- `nhl-dashboard/backend/services/scores.py` — `refresh_scores()` (primary score + live-update pipeline)
+- `nhl-dashboard/backend/services/live.py` — `refresh_live()`, `_update_from_boxscore()` (superseded; see legacy note under Endpoint 2)
 - `nhl-dashboard/backend/odds_client.py` — deterministic fixture stub
 
 ---
@@ -79,51 +80,66 @@ current implementation:
 
 ---
 
-## Endpoint 2 — `/v1/gamecenter/{game_id}/boxscore`
+## Endpoint 2 — `/v1/score/now`
 
 **Base URL:** `https://api-web.nhle.com/v1`
 
-Polled by `get_boxscore(game_id)` on the live poll interval
-(`Config.POLL_LIVE_INTERVAL`). Responses are cached per URL path string (e.g.
-`/gamecenter/12345/boxscore`) in a 128-slot `TTLCache` with a 5-minute TTL.
-`refresh_live()` calls this for every `Game` row whose `status == "live"` and
-passes the result to `_update_from_boxscore()` which writes the data back in place.
+Polled by `get_score_now()` on the score poll interval (`Config.POLL_SCORES_INTERVAL`).
+Responses are cached in a 128-slot `TTLCache` with a 5-minute TTL. `refresh_scores()`
+in `services/scores.py` makes a **single call** that covers all of today's games
+regardless of status — eliminating the N+1 boxscore-per-live-game pattern and the
+bootstrap gap where newly-started games were missed before the slate poller ran.
 
-### → `game` table (live updates only)
+### → `game` table (status + live updates)
 
 | API JSON path | `game` column | Transform |
 |---|---|---|
-| `gameState` | `game.status` | Inline in `_update_from_boxscore()` (live.py): `{"LIVE","CRIT"}` → `"live"`, `{"FINAL","OFF"}` → `"final"`, else unchanged |
-| `periodDescriptor` | `game.period` | Inline in `_update_from_boxscore()` (live.py): `periodType == "OT"` → `"OT"`, `periodType == "SO"` → `"SO"`, `periodType == "REG"` uses ordinal dict `{1:"1st", 2:"2nd", 3:"3rd"}`; unknown numbers fall back to `f'{n}th'` |
-| `clock.timeRemaining` | `game.clock` | None — stored as-is (e.g. `"12:34"`) |
-| `awayTeam.score` | `game.away_score` | Defaults to current value if key absent |
-| `homeTeam.score` | `game.home_score` | Defaults to current value if key absent |
-| `awayTeam.sog` | `game.away_sog` | Defaults to current value if key absent |
-| `homeTeam.sog` | `game.home_sog` | Defaults to current value if key absent |
+| `games[].gameState` | `game.status` | `_map_game_state()` (`services/scores.py`): `{"FINAL","OFF"}` → `"final"`, `{"LIVE","CRIT"}` → `"live"`, else → `"scheduled"` |
+| `games[].periodDescriptor` | `game.period` | `_parse_period()` (`services/scores.py`): `periodType == "OT"` → `"OT"`, `"SO"` → `"SO"`, `"REG"` uses ordinal dict `{1:"1st", 2:"2nd", 3:"3rd"}`; unknown numbers fall back to `f'{n}th'` |
+| `games[].clock.timeRemaining` | `game.clock` | None — stored as-is (e.g. `"12:34"`) |
+| `games[].awayTeam.score` | `game.away_score` | Falls back to current DB value if key absent |
+| `games[].homeTeam.score` | `game.home_score` | Falls back to current DB value if key absent |
+| `games[].awayTeam.sog` | `game.away_sog` | Falls back to current DB value if key absent |
+| `games[].homeTeam.sog` | `game.home_sog` | Falls back to current DB value if key absent |
 
-**Columns set by `refresh_live()` / `_update_from_boxscore()` directly (not from API):**
+**Columns set by `refresh_scores()` directly (not from API):**
 
 | Column | Value |
 |---|---|
 | `game.updated_at` | `datetime.now(timezone.utc)` (naive UTC) at the time of the call |
 
-### Ignored / unused fields from `/v1/gamecenter/{game_id}/boxscore`
+### Ignored / unused fields from `/v1/score/now`
+
+The following fields are present in the API response but are not consumed by `refresh_scores()`:
 
 | API JSON path | Notes |
 |---|---|
-| `id` | Game ID — already known from the DB query; not re-written |
-| `season` | Season identifier — not stored |
-| `gameType` | Game type integer — not stored |
-| `clock.inIntermission` | Boolean intermission flag — not stored |
-| `clock.secondsRemaining` | Numeric seconds remaining — not stored (only string form used) |
-| `awayTeam.abbrev` | Team abbreviation — already on the `game` row; not re-written |
-| `homeTeam.abbrev` | Same as above |
-| `awayTeam.name` | Team name object — not stored (already in `team` table) |
-| `homeTeam.name` | Same as above |
-| `playerByGameStats` | Per-player stats breakdown — not stored |
-| `summary` | Goals, penalties, and scratches summaries — not stored |
-| `shotsByPeriod` | Period-by-period shot totals — not stored |
-| `teamGameStats` | Aggregate team stats (hits, blocks, PIM, etc.) — not stored |
+| `games[].clock.secondsRemaining` | Numeric seconds remaining — not stored (only string form used) |
+| `games[].clock.running` | Boolean running flag — not stored |
+| `games[].clock.inIntermission` | Boolean intermission flag — not stored |
+| `games[].period` | Top-level integer period count (distinct from `periodDescriptor`) — not stored |
+| `games[].periodDescriptor.maxRegulationPeriods` | Max regulation periods (usually 3) — not stored |
+| `games[].gameOutcome.lastPeriodType` | Final period type string — not stored |
+| `games[].goals[]` | Per-goal details array — not stored |
+| `games[].seriesStatus` | Playoff series status object — not stored |
+| `games[].tvBroadcasts[]` | Broadcast network objects — not stored |
+| `games[].neutralSite` | Boolean neutral-site flag — not stored |
+| `games[].venueTimezone` | Venue timezone string — not stored |
+| `games[].threeMinRecap` | Recap video URL — not stored |
+| `games[].condensedGame` | Condensed game video URL — not stored |
+| `games[].gameCenterLink` | Deep-link path to NHL.com game center — not stored |
+| `games[].seriesUrl` | Playoff series URL — not stored |
+| `games[].threeMinRecapFr` | French-language recap URL — not stored |
+| `games[].condensedGameFr` | French-language condensed game URL — not stored |
+
+### Legacy endpoint — `/v1/gamecenter/{game_id}/boxscore`
+
+> **Superseded by `/v1/score/now`.** The original live-update implementation
+> (`refresh_live()` / `_update_from_boxscore()` in `services/live.py`) polled
+> `get_boxscore(game_id)` for every `Game` row with `status == "live"`. This
+> per-game approach was replaced by the single-call `refresh_scores()` strategy
+> above, which also handles games that have just started and are not yet marked
+> live in the database.
 
 ---
 
@@ -198,11 +214,13 @@ One row per game; all fields mapped directly with no transformation.
 
 ## Transformation Reference
 
-Status-mapping and period-mapping logic are implemented **inline** — there are no
-named helper functions in `nhl_client.py`. The logic lives in two places:
+Status-mapping and period-mapping logic live in named helpers in `services/scores.py`
+and also inline in the older `services/slate.py` and `services/live.py`:
 
 | Operation | Source location | Input → Output |
 |---|---|---|
-| Game state → status string | Inline in `refresh_slate()` (`services/slate.py`) | `{"LIVE","CRIT"}` → `"live"`, `{"FINAL","OFF"}` → `"final"`, else → `"scheduled"` |
-| Game state → status string | Inline in `_update_from_boxscore()` (`services/live.py`) | Same mapping; applied to boxscore `gameState` |
-| `periodDescriptor` → period label | Inline in `_update_from_boxscore()` (`services/live.py`) | `"OT"` / `"SO"` / `"1st"` / `"2nd"` / `"3rd"` / `f'{n}th'` |
+| Game state → status string | `_map_game_state()` (`services/scores.py`) | `{"FINAL","OFF"}` → `"final"`, `{"LIVE","CRIT"}` → `"live"`, else → `"scheduled"` |
+| Game state → status string | Inline in `refresh_slate()` (`services/slate.py`) | Same mapping; applied during schedule ingestion |
+| Game state → status string | Inline in `_update_from_boxscore()` (`services/live.py`) | Same mapping; applied to boxscore `gameState` (legacy) |
+| `periodDescriptor` → period label | `_parse_period()` (`services/scores.py`) | `"OT"` / `"SO"` / `"1st"` / `"2nd"` / `"3rd"` / `f'{n}th'` |
+| `periodDescriptor` → period label | Inline in `_update_from_boxscore()` (`services/live.py`) | Same logic (legacy) |

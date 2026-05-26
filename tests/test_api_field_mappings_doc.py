@@ -81,3 +81,74 @@ def test_unused_fields_noted():
     text = _doc_text()
     assert "unused" in text.lower() or "ignored" in text.lower() or "not consumed" in text.lower(), \
         "No note about unused/ignored API fields found"
+
+
+# ── Issue #129: /v1/score/now endpoint attribution ──────────────────────────
+
+
+def test_score_now_is_primary_score_endpoint():
+    """/v1/score/now must be documented as the primary score polling endpoint."""
+    text = _doc_text()
+    assert "/v1/score/now" in text, "/v1/score/now not documented as score endpoint"
+
+
+def test_refresh_scores_documented():
+    """refresh_scores() must be documented as the consumer of /v1/score/now."""
+    text = _doc_text()
+    assert "refresh_scores" in text, "refresh_scores() not documented"
+
+
+def test_scores_service_path_documented():
+    """services/scores.py must be listed as the consuming module."""
+    text = _doc_text()
+    assert "scores.py" in text, "services/scores.py not documented"
+
+
+def test_score_now_all_written_columns_documented():
+    """/v1/score/now field-mapping table must cover all columns refresh_scores() writes."""
+    text = _doc_text()
+    for col in ("game.status", "game.period", "game.clock",
+                "game.away_score", "game.home_score",
+                "game.away_sog", "game.home_sog"):
+        assert col in text, f"{col} missing from /v1/score/now field-mapping table"
+
+
+def test_ignored_clock_subfields_documented():
+    """Ignored clock sub-fields must be listed in the /v1/score/now ignored section."""
+    text = _doc_text()
+    for field in ("clock.secondsRemaining", "clock.running", "clock.inIntermission"):
+        assert field in text, f"Ignored field '{field}' not documented"
+
+
+def test_ignored_period_descriptor_max_regulation_documented():
+    """Ignored periodDescriptor.maxRegulationPeriods must be listed."""
+    text = _doc_text()
+    assert "maxRegulationPeriods" in text, \
+        "Ignored field 'periodDescriptor.maxRegulationPeriods' not documented"
+
+
+def test_ignored_game_outcome_field_documented():
+    """Ignored gameOutcome.lastPeriodType must be listed."""
+    text = _doc_text()
+    assert "gameOutcome" in text, "Ignored field 'gameOutcome' not documented"
+
+
+def test_ignored_goals_and_series_fields_documented():
+    """Ignored goals[] and seriesStatus must be listed."""
+    text = _doc_text()
+    assert "goals" in text, "Ignored field 'goals[]' not documented"
+    assert "seriesStatus" in text, "Ignored field 'seriesStatus' not documented"
+
+
+def test_ignored_broadcast_and_venue_fields_documented():
+    """Ignored tvBroadcasts, neutralSite, and venueTimezone must be listed."""
+    text = _doc_text()
+    for field in ("neutralSite", "venueTimezone"):
+        assert field in text, f"Ignored field '{field}' not documented"
+
+
+def test_ignored_recap_link_fields_documented():
+    """Ignored recap/video link fields must be listed."""
+    text = _doc_text()
+    for field in ("threeMinRecap", "condensedGame", "gameCenterLink", "seriesUrl"):
+        assert field in text, f"Ignored field '{field}' not documented"
