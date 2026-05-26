@@ -109,6 +109,87 @@ class TestMigrationCli:
         commands = list(app.cli.commands)
         assert 'migrate-game-table' in commands
 
+    def test_migrate_away_columns_command_registered(self, app):
+        """'migrate-away-columns' CLI command must be registered on the Flask app (Issue #147)."""
+        commands = list(app.cli.commands)
+        assert 'migrate-away-columns' in commands
+
+
+class TestMigrateAwayColumns:
+    def test_migrate_away_columns_renames_visiting_score(self):
+        """Migration renames visiting_score → away_score in a legacy-schema DB (Issue #147)."""
+        import sqlite3
+        import tempfile
+        import os
+        from sqlalchemy import create_engine, text
+
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            tmp_path = f.name
+        try:
+            con = sqlite3.connect(tmp_path)
+            con.execute(
+                "CREATE TABLE game ("
+                "game_id INTEGER PRIMARY KEY, season INTEGER, "
+                "visiting_score INTEGER, visiting_team_id INTEGER, "
+                "home_score INTEGER, home_team_id INTEGER)"
+            )
+            con.execute(
+                "INSERT INTO game VALUES (2026020001, 20252026, 3, 10, 2, 20)"
+            )
+            con.commit()
+            con.close()
+
+            engine = create_engine(f"sqlite:///{tmp_path}")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE game RENAME COLUMN visiting_team_id TO away_team_id"))
+                conn.execute(text("ALTER TABLE game RENAME COLUMN visiting_score TO away_score"))
+
+            with engine.connect() as conn:
+                cols = {row[1] for row in conn.execute(text("PRAGMA table_info(game)"))}
+            assert 'away_score' in cols
+            assert 'away_team_id' in cols
+            assert 'visiting_score' not in cols
+            assert 'visiting_team_id' not in cols
+        finally:
+            os.unlink(tmp_path)
+
+    def test_migrate_away_columns_preserves_row_data(self):
+        """Row data is intact after visiting_* → away_* column rename (Issue #147)."""
+        import sqlite3
+        import tempfile
+        import os
+        from sqlalchemy import create_engine, text
+
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            tmp_path = f.name
+        try:
+            con = sqlite3.connect(tmp_path)
+            con.execute(
+                "CREATE TABLE game ("
+                "game_id INTEGER PRIMARY KEY, season INTEGER, "
+                "visiting_score INTEGER, visiting_team_id INTEGER, "
+                "home_score INTEGER, home_team_id INTEGER)"
+            )
+            con.execute(
+                "INSERT INTO game VALUES (2026020001, 20252026, 3, 10, 2, 20)"
+            )
+            con.commit()
+            con.close()
+
+            engine = create_engine(f"sqlite:///{tmp_path}")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE game RENAME COLUMN visiting_team_id TO away_team_id"))
+                conn.execute(text("ALTER TABLE game RENAME COLUMN visiting_score TO away_score"))
+
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT away_score, away_team_id FROM game WHERE game_id = 2026020001")
+                ).fetchone()
+            assert row[0] == 3
+            assert row[1] == 10
+        finally:
+            os.unlink(tmp_path)
+
 
 class TestForeignKeys:
     def test_odds_snapshot_fk_references_live_game(self):

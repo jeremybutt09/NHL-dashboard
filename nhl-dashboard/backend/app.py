@@ -131,6 +131,35 @@ def create_app(config_class=Config, test_config=None):
             click.echo(f"Migration failed: {exc}", err=True)
             raise SystemExit(1)
 
+    @app.cli.command("migrate-away-columns")
+    def migrate_away_columns_cmd():
+        """Migration (Issue #147): rename visiting_* columns to away_* in the game table.
+
+        Run once against a DB created before Issue #144 renamed the columns in the
+        SQLAlchemy model.  Re-running is safe: SQLite raises 'no such column' which
+        this command treats as a no-op confirmation.
+        """
+        from sqlalchemy import text, inspect as sa_inspect
+        inspector = sa_inspect(db.engine)
+        col_names = {col['name'] for col in inspector.get_columns('game')}
+        if 'visiting_score' not in col_names and 'visiting_team_id' not in col_names:
+            click.echo("No action needed: game table already uses away_* columns.")
+            return
+        try:
+            with db.engine.begin() as conn:
+                if 'visiting_team_id' in col_names:
+                    conn.execute(text(
+                        "ALTER TABLE game RENAME COLUMN visiting_team_id TO away_team_id"
+                    ))
+                if 'visiting_score' in col_names:
+                    conn.execute(text(
+                        "ALTER TABLE game RENAME COLUMN visiting_score TO away_score"
+                    ))
+            click.echo("Migration complete: renamed visiting_* → away_* in game table.")
+        except Exception as exc:
+            click.echo(f"Migration failed: {exc}", err=True)
+            raise SystemExit(1)
+
     return app
 
 
