@@ -5,11 +5,6 @@ const MARKETS = [
   { id: 'totals',  label: 'Total (O/U)' },
 ]
 
-// Stub odds partners — real provider integration is out of v1 scope (HANDOFF.md §7)
-const PARTNERS = [
-  { id: 'consensus', name: 'Consensus', short: 'AVG', color: '#1ba1b8' },
-]
-
 function SegmentButton({ label, value }) {
   return (
     <button style={{
@@ -31,34 +26,49 @@ function SegmentButton({ label, value }) {
   )
 }
 
-function OddsPartnerSelector({ book, onChange }) {
-  const current = PARTNERS.find(p => p.id === book) || PARTNERS[0]
+function OddsPartnerSelector({ partners, partnerId, onChange }) {
+  if (!partners || partners.length === 0) return null
+  const current = partners.find(p => p.partner_id === partnerId) || partners[0]
+
   return (
-    <button
-      onClick={() => {}}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        padding: '6px 12px 6px 10px',
-        background: 'var(--paper)',
-        border: '1px solid var(--rule)',
-        borderRadius: 8,
-        fontSize: 12, fontWeight: 500, color: 'var(--ink)',
-        cursor: 'default',
-        boxShadow: 'var(--shadow)',
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <span style={{
+        position: 'absolute', left: 10, pointerEvents: 'none',
+        fontSize: 10, color: 'var(--faint)', letterSpacing: '0.08em', textTransform: 'uppercase',
       }}>
-      <span style={{ fontSize: 10, color: 'var(--faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Odds</span>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: current.color }} />
-        <span style={{ fontWeight: 600 }}>{current.name}</span>
+        Odds
       </span>
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ color: 'var(--faint)' }}>
+      <select
+        value={partnerId ?? ''}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{
+          paddingLeft: 44, paddingRight: 28, paddingTop: 6, paddingBottom: 6,
+          background: 'var(--paper)',
+          border: '1px solid var(--rule)',
+          borderRadius: 8,
+          fontSize: 12, fontWeight: 600, color: 'var(--ink)',
+          cursor: 'pointer',
+          boxShadow: 'var(--shadow)',
+          appearance: 'none',
+          WebkitAppearance: 'none',
+        }}
+      >
+        {partners.map(p => (
+          <option key={p.partner_id} value={p.partner_id}>{p.name}</option>
+        ))}
+      </select>
+      <svg
+        width="10" height="10" viewBox="0 0 10 10" fill="none"
+        stroke="currentColor" strokeWidth="1.6"
+        style={{ position: 'absolute', right: 10, pointerEvents: 'none', color: 'var(--faint)' }}
+      >
         <path d="M2.5 4l2.5 2.5L7.5 4"/>
       </svg>
-    </button>
+    </div>
   )
 }
 
-export function FilterBar({ numGames, totalGames, liveCount, market, onMarketChange, day }) {
+export function FilterBar({ numGames, totalGames, liveCount, market, onMarketChange, day, partners, partnerId, onPartnerChange }) {
   const todayKey = () => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -120,7 +130,7 @@ export function FilterBar({ numGames, totalGames, liveCount, market, onMarketCha
           })}
         </div>
         <SegmentButton label="Sort" value="Edge ↓" />
-        <OddsPartnerSelector book="consensus" onChange={() => {}} />
+        <OddsPartnerSelector partners={partners} partnerId={partnerId} onChange={onPartnerChange} />
       </div>
     </div>
   )

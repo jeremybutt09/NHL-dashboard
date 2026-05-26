@@ -359,8 +359,16 @@ def prune_old_snapshots():
     print(f'[slate] Pruned {result.rowcount} old snapshots')
 
 
-def build_today_response() -> dict:
-    """Return the JSON shape for GET /api/games/today."""
+def build_today_response(partner_id: int | None = None) -> dict:
+    """Return the JSON shape for GET /api/games/today.
+
+    Args:
+        partner_id: Optional NhlOddsPartner.partner_id.  When provided, the
+            ``ml`` field in each game row is sourced from the most recent
+            NhlOddsLine row for that (game, partner) pair instead of the
+            OddsSnapshot consensus.  When None, the legacy OddsSnapshot path
+            is used unchanged.
+    """
     from sqlalchemy import select
 
     now = datetime.now(timezone.utc)
@@ -369,10 +377,53 @@ def build_today_response() -> dict:
         select(LiveGame).order_by(LiveGame.start_est)
     ).all()
 
-    return _build_from_db(today_games, now)
+    return _build_from_db(today_games, now, partner_id=partner_id)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
+def _parse_ml_value(val: str | None) -> int | None:
+    """Parse an American-odds string (e.g. '-152', '+126') to int, or None on failure."""
+    if val is None:
+        return None
+    try:
+        return int(str(val).replace('+', '').strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _get_partner_ml(game_id: int, partner_id: int) -> dict | None:
+    """Return the most recent NhlOddsLine ml dict for a (game, partner) pair, or None.
+
+    Args:
+        game_id: The NHL game primary key.
+        partner_id: The NhlOddsPartner primary key.
+
+    Returns:
+        Dict with ``away`` and ``home`` integer American odds, or None when no
+        matching row exists or the stored values cannot be parsed.
+    """
+    from sqlalchemy import select
+    from models import NhlOddsLine
+
+    row = db.session.scalars(
+        select(NhlOddsLine)
+        .where(NhlOddsLine.game_id == game_id)
+        .where(NhlOddsLine.partner_id == partner_id)
+        .order_by(NhlOddsLine.fetched_at.desc())
+        .limit(1)
+    ).first()
+
+    if row is None:
+        return None
+
+    away = _parse_ml_value(row.away_value)
+    home = _parse_ml_value(row.home_value)
+    if away is None or home is None:
+        return None
+
+    return {'away': away, 'home': home}
+
 
 def _get_sparkline(game_id: int) -> list[float]:
     """Return up to 24 OddsSnapshot away_implied values for this game, chronological."""
@@ -388,7 +439,7 @@ def _get_sparkline(game_id: int) -> list[float]:
     return [s.away_implied for s in reversed(snaps)]
 
 
-def _build_from_db(games: list, now: datetime) -> dict:
+def _build_from_db(games: list, now: datetime, partner_id: int | None = None) -> dict:
     from sqlalchemy import select
 
     result = []
@@ -443,6 +494,12 @@ def _build_from_db(games: list, now: datetime) -> dict:
                 dt = dt.replace(tzinfo=_EASTERN)
             start_est_iso = dt.isoformat()
 
+        # When a specific partner is requested, use NhlOddsLine instead of OddsSnapshot
+        if partner_id is not None:
+            ml = _get_partner_ml(g.game_id, partner_id)
+        else:
+            ml = {'away': snap.away_ml, 'home': snap.home_ml} if snap else None
+
         row = {
             'game_id':    g.game_id,
             'away':       {'code': g.away_code, 'name': away_name, 'record': '', 'l10': ''},
@@ -453,7 +510,7 @@ def _build_from_db(games: list, now: datetime) -> dict:
             'venue':  venue,
             'status': g.status,
             'live':   live_block,
-            'ml':     {'away': snap.away_ml, 'home': snap.home_ml}           if snap      else None,
+            'ml':     ml,
             'ml_open':{'away': snap_open.away_ml, 'home': snap_open.home_ml} if snap_open else None,
             'implied':{'away': round(imp_a, 2), 'home': round(imp_h, 2)},
             'fair':   {'away': round(fair_a, 2),  'home': round(fair_h, 2)},

@@ -49,10 +49,12 @@ def create_app(config_class=Config, test_config=None):
     from routes.health import health_bp
     from routes.games import games_bp
     from routes.game_detail import game_detail_bp
+    from routes.partners import partners_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(games_bp)
     app.register_blueprint(game_detail_bp)
+    app.register_blueprint(partners_bp)
 
     # Global JSON error handlers — prevent Flask from returning HTML error pages
     from flask import jsonify as _jsonify
