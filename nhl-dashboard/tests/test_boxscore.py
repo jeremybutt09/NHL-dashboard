@@ -480,6 +480,48 @@ class TestBackfillBoxscores:
         assert db.session.get(Boxscore, 2001) is not None
         assert db.session.get(Boxscore, 2002) is None
 
+    def test_backfill_boxscores_skips_empty_dict_response(self, db):
+        """backfill_boxscores() skips a game when get_boxscore returns {}."""
+        db.session.add(Game(game_id=_GAME_ID, game_date="2025-01-01", season=20242025))
+        db.session.add(Game(game_id=_GAME_ID + 1, game_date="2025-01-02", season=20242025))
+        db.session.commit()
+
+        def side_effect(game_id):
+            if game_id == _GAME_ID:
+                return {}
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=side_effect), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, _GAME_ID) is None
+        assert db.session.get(Boxscore, _GAME_ID + 1) is not None
+
+    def test_backfill_boxscores_empty_response_does_not_abort_run(self, db):
+        """backfill_boxscores() continues processing after an empty response."""
+        db.session.add(Game(game_id=3001, game_date="2025-01-01"))
+        db.session.add(Game(game_id=3002, game_date="2025-01-02"))
+        db.session.add(Game(game_id=3003, game_date="2025-01-03"))
+        db.session.commit()
+
+        def side_effect(game_id):
+            if game_id == 3002:
+                return {}
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=side_effect), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 2
+        assert db.session.get(Boxscore, 3001) is not None
+        assert db.session.get(Boxscore, 3002) is None
+        assert db.session.get(Boxscore, 3003) is not None
+
 
 # ── backfill-boxscores CLI command ────────────────────────────────────────────
 
@@ -527,3 +569,23 @@ class TestBackfillBoxscoresCommand:
             select(Boxscore).where(Boxscore.game_id == _GAME_ID)
         ).all()
         assert len(rows) == 1
+
+    def test_backfill_boxscores_command_with_season_filter(self, app, db):
+        """backfill-boxscores --season N limits processing to that season only."""
+        from models import Game
+        db.session.add(Game(game_id=2001, game_date="2026-01-01", season=20252026))
+        db.session.add(Game(game_id=2002, game_date="2025-01-01", season=20242025))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(
+                args=["backfill-boxscores", "--season", "20252026"]
+            )
+
+        assert result.exit_code == 0
+        assert db.session.get(Boxscore, 2001) is not None
+        assert db.session.get(Boxscore, 2002) is None

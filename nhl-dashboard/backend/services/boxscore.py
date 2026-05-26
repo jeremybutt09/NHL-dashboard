@@ -186,12 +186,20 @@ def backfill_boxscores(
     total = len(game_ids)
     now = now_et()
     count = 0
+    skipped = 0
 
     for i, game_id in enumerate(game_ids):
         try:
             raw = nhl_client.get_boxscore(game_id)
         except Exception as exc:
             logger.warning('[backfill_boxscores] Failed to fetch game %s: %s', game_id, exc)
+            skipped += 1
+            time.sleep(delay)
+            continue
+
+        if not raw or 'id' not in raw:
+            logger.warning('[backfill_boxscores] No data for game_id %s, skipping', game_id)
+            skipped += 1
             time.sleep(delay)
             continue
 
@@ -207,5 +215,9 @@ def backfill_boxscores(
         time.sleep(delay)
 
     db.session.commit()
-    logger.info('[backfill_boxscores] Upserted %d/%d boxscores', count, total)
+    season_label = str(season) if season is not None else 'all'
+    logger.info(
+        '[backfill_boxscores] Season %s: %d upserted, %d skipped',
+        season_label, count, skipped,
+    )
     return count
