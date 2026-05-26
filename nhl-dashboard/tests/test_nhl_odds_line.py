@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select
 
-from models import Game, NhlOddsLine, NhlOddsPartner
+from models import LiveGame, NhlOddsLine, NhlOddsPartner
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ def _seed_partners(db, partner_ids=(7, 9)):
 
 def _seed_game(db, game_id=2026030001):
     """Insert a Game row with a known game_id."""
-    db.session.add(Game(
+    db.session.add(LiveGame(
         game_id=game_id,
         start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
         status="scheduled",

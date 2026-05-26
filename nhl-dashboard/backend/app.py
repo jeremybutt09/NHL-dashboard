@@ -78,11 +78,30 @@ def create_app(config_class=Config, test_config=None):
 
     @app.cli.command("backfill-historical")
     def backfill_historical_cmd():
-        """One-time backfill: upsert all available NHL historical games into nhl_historical_game."""
+        """One-time backfill: upsert all available NHL historical games into the game table."""
         import click
         from services.historical import ingest_historical_games
         count = ingest_historical_games()
         click.echo(f"Backfilled {count} historical games.")
+
+    @app.cli.command("migrate-game-table")
+    def migrate_game_table_cmd():
+        """Migration (Issue #131): DROP legacy game table, RENAME nhl_historical_game → game.
+
+        Run this once against a production DB that was created before Issue #131.
+        Both steps execute in a single transaction to avoid naming conflicts.
+        After migration, run db.create_all() (or restart the app) to create live_game.
+        """
+        import click
+        from sqlalchemy import text
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text("DROP TABLE IF EXISTS game"))
+                conn.execute(text("ALTER TABLE nhl_historical_game RENAME TO game"))
+            click.echo("Migration complete: dropped legacy 'game', renamed 'nhl_historical_game' → 'game'.")
+        except Exception as exc:
+            click.echo(f"Migration failed: {exc}", err=True)
+            raise SystemExit(1)
 
     return app
 

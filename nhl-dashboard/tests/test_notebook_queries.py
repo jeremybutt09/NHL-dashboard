@@ -79,7 +79,7 @@ class TestExpandedTeamQuery:
             text(
                 """
                 SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
-                FROM game g
+                FROM live_game g
                 JOIN team t_away ON t_away.tri_code = g.away_code
                 JOIN team t_home ON t_home.tri_code = g.home_code
                 """
@@ -195,10 +195,10 @@ class TestNhlApiOddsLineQuery:
     """Validates the SQL used in the nhl_odds_line recent-lines notebook cell."""
 
     def _seed(self, db):
-        from models import NhlOddsPartner, NhlOddsLine, Game
+        from models import NhlOddsPartner, NhlOddsLine, LiveGame
 
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel", country="CA"))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=2026030001,
             start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
@@ -276,10 +276,10 @@ class TestLatestOddsPerGameQuery:
 
     def test_latest_odds_returns_one_row_per_game_partner(self, db):
         """Latest-per-game query returns only the newest row for each (game, partner)."""
-        from models import NhlOddsPartner, NhlOddsLine, Game
+        from models import NhlOddsPartner, NhlOddsLine, LiveGame
 
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=2026030001,
             start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
@@ -351,10 +351,10 @@ class TestCrossSourceComparisonQuery:
 
     def test_cross_source_shows_both_nhl_line_and_snapshot(self, db):
         """Cross-source query returns nhl_odds_line and odds_snapshot data side-by-side."""
-        from models import NhlOddsPartner, NhlOddsLine, Game, OddsSnapshot
+        from models import NhlOddsPartner, NhlOddsLine, LiveGame, OddsSnapshot
 
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=2026030001,
             start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
@@ -381,7 +381,7 @@ class TestCrossSourceComparisonQuery:
                        l.fetched_at AS nhl_fetched_at,
                        o.away_ml AS snap_away_ml, o.home_ml AS snap_home_ml,
                        o.fetched_at AS snap_fetched_at
-                FROM game g
+                FROM live_game g
                 JOIN nhl_odds_line l ON l.game_id = g.game_id
                 JOIN nhl_odds_partner p ON p.partner_id = l.partner_id
                 LEFT JOIN (
@@ -402,10 +402,10 @@ class TestCrossSourceComparisonQuery:
 
     def test_cross_source_shows_nhl_line_when_no_snapshot(self, db):
         """Cross-source LEFT JOIN returns nhl_odds_line row even with no odds_snapshot."""
-        from models import NhlOddsPartner, NhlOddsLine, Game
+        from models import NhlOddsPartner, NhlOddsLine, LiveGame
 
         db.session.add(NhlOddsPartner(partner_id=7, name="FanDuel"))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=2026030001,
             start_est=datetime(2026, 5, 24, 23, 0, tzinfo=timezone.utc),
             status="scheduled",
@@ -428,7 +428,7 @@ class TestCrossSourceComparisonQuery:
                        l.fetched_at AS nhl_fetched_at,
                        o.away_ml AS snap_away_ml, o.home_ml AS snap_home_ml,
                        o.fetched_at AS snap_fetched_at
-                FROM game g
+                FROM live_game g
                 JOIN nhl_odds_line l ON l.game_id = g.game_id
                 JOIN nhl_odds_partner p ON p.partner_id = l.partner_id
                 LEFT JOIN (
@@ -459,7 +459,7 @@ class TestCrossSourceComparisonQuery:
                        l.fetched_at AS nhl_fetched_at,
                        o.away_ml AS snap_away_ml, o.home_ml AS snap_home_ml,
                        o.fetched_at AS snap_fetched_at
-                FROM game g
+                FROM live_game g
                 JOIN nhl_odds_line l ON l.game_id = g.game_id
                 JOIN nhl_odds_partner p ON p.partner_id = l.partner_id
                 LEFT JOIN (
@@ -541,10 +541,10 @@ class TestSection3Last10GamesQuery:
 
     def _seed_games(self, db):
         """Insert 12 games with distinct past start_est values."""
-        from models import Game
+        from models import LiveGame
 
         for i in range(12):
-            db.session.add(Game(
+            db.session.add(LiveGame(
                 game_id=2026010001 + i,
                 start_est=datetime(2026, 5, 10, 19, 0, tzinfo=timezone.utc) + timedelta(hours=i),
                 status="final",
@@ -559,7 +559,7 @@ class TestSection3Last10GamesQuery:
         result = conn.execute(
             text(
                 "SELECT game_id, away_code, home_code, start_est, status"
-                " FROM game"
+                " FROM live_game"
                 " ORDER BY start_est DESC LIMIT 10"
             )
         )
@@ -568,19 +568,19 @@ class TestSection3Last10GamesQuery:
 
     def test_section3_last10_ordered_newest_first(self, db):
         """Query returns games ordered by start_est descending (newest first)."""
-        from models import Game
+        from models import LiveGame
 
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=1001,
             start_est=datetime(2026, 5, 20, 19, 0, tzinfo=timezone.utc),
             status="final",
         ))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=1003,
             start_est=datetime(2026, 5, 22, 19, 0, tzinfo=timezone.utc),
             status="final",
         ))
-        db.session.add(Game(
+        db.session.add(LiveGame(
             game_id=1002,
             start_est=datetime(2026, 5, 21, 19, 0, tzinfo=timezone.utc),
             status="final",
@@ -589,7 +589,7 @@ class TestSection3Last10GamesQuery:
 
         conn = db.engine.connect()
         result = conn.execute(
-            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+            text("SELECT game_id FROM live_game ORDER BY start_est DESC LIMIT 10")
         )
         game_ids = [r.game_id for r in result.fetchall()]
         assert game_ids == [1003, 1002, 1001]
@@ -600,7 +600,7 @@ class TestSection3Last10GamesQuery:
 
         conn = db.engine.connect()
         result = conn.execute(
-            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+            text("SELECT game_id FROM live_game ORDER BY start_est DESC LIMIT 10")
         )
         assert len(result.fetchall()) == 10
 
@@ -608,6 +608,6 @@ class TestSection3Last10GamesQuery:
         """Query on empty game table returns zero rows without error."""
         conn = db.engine.connect()
         result = conn.execute(
-            text("SELECT game_id FROM game ORDER BY start_est DESC LIMIT 10")
+            text("SELECT game_id FROM live_game ORDER BY start_est DESC LIMIT 10")
         )
         assert result.fetchall() == []

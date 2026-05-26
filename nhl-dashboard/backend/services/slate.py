@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 _EASTERN = ZoneInfo("America/New_York")
 
 from extensions import db
-from models import Game, NhlOddsLine, OddsSnapshot, ModelFair
+from models import LiveGame, NhlOddsLine, OddsSnapshot, ModelFair
 from services.implied import american_to_implied, devig_two_way, edge as calc_edge
 
 logger = logging.getLogger(__name__)
@@ -146,9 +146,9 @@ def refresh_schedule():
         else:
             status = 'scheduled'
 
-        row = db.session.get(Game, game_id)
+        row = db.session.get(LiveGame, game_id)
         if row is None:
-            row = Game(game_id=game_id)
+            row = LiveGame(game_id=game_id)
             db.session.add(row)
 
         row.start_est  = start_est
@@ -187,7 +187,7 @@ def refresh_schedule():
 
 
 def refresh_slate():
-    """Pull today's schedule from NHL API and upsert Game rows."""
+    """Pull today's schedule from NHL API and upsert LiveGame rows."""
     from nhl_client import get_schedule_now, get_all_teams
     from models import Team
 
@@ -256,9 +256,9 @@ def refresh_slate():
         else:
             status = 'scheduled'
 
-        row = db.session.get(Game, game_id)
+        row = db.session.get(LiveGame, game_id)
         if row is None:
-            row = Game(game_id=game_id)
+            row = LiveGame(game_id=game_id)
             db.session.add(row)
 
         row.start_est  = start_est
@@ -364,7 +364,7 @@ def build_today_response() -> dict:
     now = datetime.now(timezone.utc)
 
     today_games = db.session.scalars(
-        select(Game).order_by(Game.start_est)
+        select(LiveGame).order_by(LiveGame.start_est)
     ).all()
 
     return _build_from_db(today_games, now)

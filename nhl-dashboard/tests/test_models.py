@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from models import Team, Game, OddsSnapshot, ModelFair
+from models import Team, Game, LiveGame, OddsSnapshot, ModelFair
 
 
 class TestTeamModel:
@@ -72,15 +72,15 @@ class TestTeamModel:
         assert rows[0].name == "Leafs Updated"
 
 
-class TestGameModelStartEstAndGameDate:
-    def test_game_has_start_est_column(self, db, team_factory):
-        """Game.start_est stores a datetime representing Eastern Time."""
+class TestLiveGameModelStartEstAndGameDate:
+    def test_live_game_has_start_est_column(self, db, team_factory):
+        """LiveGame.start_est stores a datetime representing Eastern Time."""
         from zoneinfo import ZoneInfo
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         eastern = ZoneInfo("America/New_York")
         est_dt = datetime(2026, 5, 24, 23, 0, 0, tzinfo=timezone.utc).astimezone(eastern)
-        game = Game(
+        game = LiveGame(
             away_code="TOR", home_code="BOS",
             status="scheduled",
             start_est=est_dt,
@@ -88,14 +88,14 @@ class TestGameModelStartEstAndGameDate:
         )
         db.session.add(game)
         db.session.commit()
-        retrieved = db.session.get(Game, game.game_id)
+        retrieved = db.session.get(LiveGame, game.game_id)
         assert retrieved.start_est is not None
 
-    def test_game_has_game_date_column(self, db, team_factory):
-        """Game.game_date stores the API's gameDate string."""
+    def test_live_game_has_game_date_column(self, db, team_factory):
+        """LiveGame.game_date stores the API's gameDate string."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
-        game = Game(
+        game = LiveGame(
             away_code="TOR", home_code="BOS",
             status="scheduled",
             start_est=datetime.now(timezone.utc),
@@ -104,46 +104,43 @@ class TestGameModelStartEstAndGameDate:
         )
         db.session.add(game)
         db.session.commit()
-        retrieved = db.session.get(Game, game.game_id)
+        retrieved = db.session.get(LiveGame, game.game_id)
         assert retrieved.game_date == "2026-05-24"
 
 
-class TestGameModel:
-    def test_game_primary_key_attribute_is_game_id(self, db, team_factory, game_factory):
-        """Game instance exposes game_id (not id) as its primary key attribute."""
+class TestLiveGameModel:
+    def test_live_game_primary_key_attribute_is_game_id(self, db, team_factory, game_factory):
+        """LiveGame instance exposes game_id (not id) as its primary key attribute."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
         assert game.game_id is not None
         assert isinstance(game.game_id, int)
 
-    def test_game_sqlite_column_is_named_game_id(self, db, team_factory, game_factory):
+    def test_live_game_sqlite_column_is_named_game_id(self, db, team_factory, game_factory):
         """SQLite column backing the primary key is literally named 'game_id'."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game_factory(away_code="TOR", home_code="BOS")
-        row = db.session.execute(text("SELECT game_id FROM game LIMIT 1")).fetchone()
+        row = db.session.execute(text("SELECT game_id FROM live_game LIMIT 1")).fetchone()
         assert row is not None
 
-    def test_game_create_and_retrieve_by_pk(self, db, team_factory, game_factory):
-        """Create a Game and retrieve it by its integer primary key."""
+    def test_live_game_create_and_retrieve_by_pk(self, db, team_factory, game_factory):
+        """Create a LiveGame and retrieve it by its integer primary key."""
         team_factory(code="TOR", name="Toronto Maple Leafs")
         team_factory(code="BOS", name="Boston Bruins")
         game = game_factory(away_code="TOR", home_code="BOS")
 
-        retrieved = db.session.get(Game, game.game_id)
+        retrieved = db.session.get(LiveGame, game.game_id)
         assert retrieved is not None
         assert retrieved.away_code == "TOR"
         assert retrieved.home_code == "BOS"
 
-    def test_game_fk_constraint_raises_integrity_error(self, db):
-        """Game referencing a nonexistent team code raises IntegrityError when FKs are enforced.
-
-        SQLite foreign-key enforcement must be enabled explicitly via PRAGMA.
-        """
+    def test_live_game_fk_constraint_raises_integrity_error(self, db):
+        """LiveGame referencing a nonexistent team code raises IntegrityError when FKs are enforced."""
         db.session.execute(text("PRAGMA foreign_keys = ON"))
 
-        game = Game(
+        game = LiveGame(
             away_code="XXX",
             home_code="YYY",
             status="scheduled",
@@ -251,7 +248,7 @@ class TestCascadeBehavior:
     def test_game_deletion_with_linked_rows_raises_integrity_error(
         self, db, team_factory, game_factory, odds_snapshot_factory, model_fair_factory
     ):
-        """Deleting a Game that has child rows raises IntegrityError when FKs are enforced.
+        """Deleting a LiveGame that has child rows raises IntegrityError when FKs are enforced.
 
         The FK columns on OddsSnapshot and ModelFair define no ON DELETE CASCADE, so SQLite
         blocks the parent deletion rather than removing child rows automatically.

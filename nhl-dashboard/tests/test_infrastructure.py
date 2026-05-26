@@ -28,15 +28,15 @@ def test_team_factory_creates_committed_row(team_factory, db):
 
 
 def test_game_factory_creates_live_row(game_factory, team_factory, db):
-    """game_factory creates a live game with default scores 2-1."""
-    from models import Game
+    """game_factory creates a live LiveGame with default scores 2-1."""
+    from models import LiveGame
     team_factory(code="TOR", name="Toronto Maple Leafs")
     team_factory(code="BOS", name="Boston Bruins")
     game = game_factory(away_code="TOR", home_code="BOS")
     assert game.status == "live"
     assert game.away_score == 2
     assert game.home_score == 1
-    assert Game.query.get(game.game_id) is not None
+    assert LiveGame.query.get(game.game_id) is not None
 
 
 def test_odds_snapshot_factory_creates_row(

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from app import create_app  # noqa: E402
 from extensions import db as _db  # noqa: E402
-from models import Team, Game, OddsSnapshot, ModelFair, NhlOddsPartner, NhlOddsLine  # noqa: E402
+from models import Team, LiveGame, OddsSnapshot, ModelFair, NhlOddsPartner, NhlOddsLine  # noqa: E402
 
 
 @pytest.fixture()
@@ -91,7 +91,7 @@ def game_factory(db):
         period="2",
         clock="10:00",
     ):
-        game = Game(
+        game = LiveGame(
             away_code=away_code,
             home_code=home_code,
             status=status,

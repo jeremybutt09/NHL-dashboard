@@ -17,8 +17,15 @@ class Team(db.Model):
         return f'<Team {self.tri_code} team_id={self.team_id}>'
 
 
-class Game(db.Model):
-    __tablename__ = 'game'
+class LiveGame(db.Model):
+    """Today's live-score game row, sourced from /v1/score/now.
+
+    This model is the renamed successor of the legacy 'game' table.  Live odds
+    (NhlOddsLine, OddsSnapshot) and model probabilities (ModelFair) reference
+    live_game.game_id.  Will be superseded by Boxscore (#133) and DashboardGame
+    (#134) in a future migration.
+    """
+    __tablename__ = 'live_game'
 
     game_id     = db.Column(db.Integer, primary_key=True)   # NHL gamePk
     start_est   = db.Column(db.DateTime, index=True, nullable=False)
@@ -39,15 +46,15 @@ class Game(db.Model):
     home_team = db.relationship('Team', foreign_keys=[home_code])
 
     def __repr__(self):
-        return f'<Game {self.away_code}@{self.home_code} {self.game_id}>'
+        return f'<LiveGame {self.away_code}@{self.home_code} {self.game_id}>'
 
 
 class OddsSnapshot(db.Model):
-    """One row per (game, fetch_time). Powers the 24h sparkline."""
+    """One row per (live_game, fetch_time). Powers the 24h sparkline."""
     __tablename__ = 'odds_snapshot'
 
     id          = db.Column(db.Integer, primary_key=True)
-    game_id     = db.Column(db.Integer, db.ForeignKey('game.game_id'), index=True)
+    game_id     = db.Column(db.Integer, db.ForeignKey('live_game.game_id'), index=True)
     fetched_at  = db.Column(db.DateTime, index=True, nullable=False)
     book        = db.Column(db.String(32), nullable=False)   # 'consensus' for v1
     away_ml     = db.Column(db.Integer)      # American odds, e.g. +120
@@ -60,7 +67,7 @@ class ModelFair(db.Model):
     """The dashboard's 'fair' probability — your own model output."""
     __tablename__ = 'model_fair'
 
-    game_id     = db.Column(db.Integer, db.ForeignKey('game.game_id'), primary_key=True)
+    game_id     = db.Column(db.Integer, db.ForeignKey('live_game.game_id'), primary_key=True)
     away_fair   = db.Column(db.Float)   # percentage points (0–100)
     home_fair   = db.Column(db.Float)   # percentage points (0–100)
     computed_at = db.Column(db.DateTime)
@@ -83,13 +90,14 @@ class NhlOddsPartner(db.Model):
         return f'<NhlOddsPartner {self.partner_id} {self.name!r}>'
 
 
-class NhlHistoricalGame(db.Model):
-    """Historical game record from the NHL Stats REST API /game endpoint.
+class Game(db.Model):
+    """Canonical historical game record from the NHL Stats REST API /game endpoint.
 
-    Sourced from GET https://api.nhle.com/stats/rest/en/game. One row per game;
+    Renamed from NhlHistoricalGame (Issue #131).  Sourced from
+    GET https://api.nhle.com/stats/rest/en/game. One row per game;
     upserted by game_id so repeated backfill runs are idempotent.
     """
-    __tablename__ = 'nhl_historical_game'
+    __tablename__ = 'game'
 
     game_id                = db.Column(db.Integer, primary_key=True)        # API: id
     eastern_start_time     = db.Column(db.String(16))                       # API: easternStartTime
@@ -106,19 +114,19 @@ class NhlHistoricalGame(db.Model):
     visiting_team_id       = db.Column(db.Integer)                          # API: visitingTeamId
 
     def __repr__(self):
-        return f'<NhlHistoricalGame {self.game_id} season={self.season}>'
+        return f'<Game {self.game_id} season={self.season}>'
 
 
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 
-    One row is inserted per (game, partner) per poll cycle, subject to a 3-minute
+    One row is inserted per (live_game, partner) per poll cycle, subject to a 3-minute
     duplicate-suppression window. Rows are pruned after 30 days.
     """
     __tablename__ = 'nhl_odds_line'
 
     id         = db.Column(db.Integer, primary_key=True)
-    game_id    = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False, index=True)
+    game_id    = db.Column(db.Integer, db.ForeignKey('live_game.game_id'), nullable=False, index=True)
     partner_id = db.Column(db.Integer, db.ForeignKey('nhl_odds_partner.partner_id'), nullable=False)
     fetched_at = db.Column(db.DateTime, nullable=False, index=True)
     away_value = db.Column(db.String(16))

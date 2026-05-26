@@ -1,4 +1,4 @@
-"""Tests for NhlHistoricalGame model, ingest_historical_games(),
+"""Tests for Game model, ingest_historical_games(),
 refresh_recent_historical_games(), and backfill-historical CLI command
 (Issues #121, #122, #127)."""
 from datetime import date, timedelta
@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select
 
-from models import NhlHistoricalGame
+from models import Game
 
 # Dynamic dates so tests remain valid over time
 _RECENT_DATE = (date.today() - timedelta(days=5)).isoformat()   # within 30-day window
@@ -81,12 +81,12 @@ _GAME_2 = {
 }
 
 
-# ── NhlHistoricalGame model ───────────────────────────────────────────────────
+# ── Game model ───────────────────────────────────────────────────
 
-class TestNhlHistoricalGameModel:
+class TestGameModel:
     def test_nhl_historical_game_model_stores_all_columns(self, db):
-        """NhlHistoricalGame row persists all 13 columns from the NHL API game shape."""
-        row = NhlHistoricalGame(
+        """Game row persists all 13 columns from the NHL API game shape."""
+        row = Game(
             game_id=2026020001,
             eastern_start_time="07:30 PM",
             game_date="2026-01-10",
@@ -104,7 +104,7 @@ class TestNhlHistoricalGameModel:
         db.session.add(row)
         db.session.commit()
 
-        retrieved = db.session.get(NhlHistoricalGame, 2026020001)
+        retrieved = db.session.get(Game, 2026020001)
         assert retrieved is not None
         assert retrieved.game_id == 2026020001
         assert retrieved.eastern_start_time == "07:30 PM"
@@ -122,47 +122,47 @@ class TestNhlHistoricalGameModel:
 
     def test_nhl_historical_game_game_id_is_integer_pk(self, db):
         """game_id is the integer primary key (not auto-generated)."""
-        row = NhlHistoricalGame(game_id=9999, season=20252026)
+        row = Game(game_id=9999, season=20252026)
         db.session.add(row)
         db.session.commit()
 
-        retrieved = db.session.get(NhlHistoricalGame, 9999)
+        retrieved = db.session.get(Game, 9999)
         assert retrieved is not None
         assert retrieved.game_id == 9999
 
     def test_nhl_historical_game_nullable_fields_allowed(self, db):
         """All non-PK columns are nullable — a minimal row (only game_id) is valid."""
-        row = NhlHistoricalGame(game_id=1)
+        row = Game(game_id=1)
         db.session.add(row)
         db.session.commit()
 
-        retrieved = db.session.get(NhlHistoricalGame, 1)
+        retrieved = db.session.get(Game, 1)
         assert retrieved is not None
         assert retrieved.eastern_start_time is None
         assert retrieved.season is None
 
     def test_nhl_historical_game_upsert_idempotent(self, db):
         """Merging the same game_id twice leaves exactly one row."""
-        db.session.add(NhlHistoricalGame(game_id=1, season=20252026))
+        db.session.add(Game(game_id=1, season=20252026))
         db.session.commit()
 
-        db.session.merge(NhlHistoricalGame(game_id=1, season=20252026))
+        db.session.merge(Game(game_id=1, season=20252026))
         db.session.commit()
 
         rows = db.session.scalars(
-            select(NhlHistoricalGame).where(NhlHistoricalGame.game_id == 1)
+            select(Game).where(Game.game_id == 1)
         ).all()
         assert len(rows) == 1
 
     def test_nhl_historical_game_upsert_overwrites_changed_field(self, db):
         """Merging with a changed home_score overwrites the existing value."""
-        db.session.add(NhlHistoricalGame(game_id=1, home_score=2))
+        db.session.add(Game(game_id=1, home_score=2))
         db.session.commit()
 
-        db.session.merge(NhlHistoricalGame(game_id=1, home_score=5))
+        db.session.merge(Game(game_id=1, home_score=5))
         db.session.commit()
 
-        row = db.session.get(NhlHistoricalGame, 1)
+        row = db.session.get(Game, 1)
         assert row.home_score == 5
 
 
@@ -176,7 +176,7 @@ class TestIngestHistoricalGames:
             count = ingest_historical_games()
 
         assert count == 2
-        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        rows = db.session.scalars(select(Game)).all()
         assert len(rows) == 2
 
     def test_ingest_historical_games_maps_fields_correctly(self, db):
@@ -185,7 +185,7 @@ class TestIngestHistoricalGames:
             from services.historical import ingest_historical_games
             ingest_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, 2026020001)
+        row = db.session.get(Game, 2026020001)
         assert row is not None
         assert row.eastern_start_time == "07:30 PM"
         assert row.game_date == "2026-01-10"
@@ -207,7 +207,7 @@ class TestIngestHistoricalGames:
             ingest_historical_games()
             ingest_historical_games()
 
-        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        rows = db.session.scalars(select(Game)).all()
         assert len(rows) == 2
 
     def test_ingest_historical_games_empty_response(self, db):
@@ -217,7 +217,7 @@ class TestIngestHistoricalGames:
             count = ingest_historical_games()
 
         assert count == 0
-        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        rows = db.session.scalars(select(Game)).all()
         assert rows == []
 
     def test_ingest_historical_games_returns_count(self, db):
@@ -238,9 +238,9 @@ class TestIngestHistoricalGames:
         with patch("nhl_client.get_all_games", return_value=[updated]):
             ingest_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, 2026020001)
+        row = db.session.get(Game, 2026020001)
         assert row.home_score == 99
-        all_rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        all_rows = db.session.scalars(select(Game)).all()
         assert len(all_rows) == 1
 
 
@@ -261,14 +261,14 @@ class TestRefreshRecentHistoricalGames:
             from services.historical import refresh_recent_historical_games
             refresh_recent_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        row = db.session.get(Game, _RECENT_GAME["id"])
         assert row is not None
         assert row.game_date == _RECENT_DATE
         assert row.home_score == 3
 
     def test_refresh_recent_updates_changed_field_within_window(self, db):
         """refresh_recent_historical_games() updates a changed field for a game in the window."""
-        db.session.add(NhlHistoricalGame(
+        db.session.add(Game(
             game_id=_RECENT_GAME["id"],
             game_date=_RECENT_DATE,
             home_score=0,
@@ -279,12 +279,12 @@ class TestRefreshRecentHistoricalGames:
             from services.historical import refresh_recent_historical_games
             refresh_recent_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        row = db.session.get(Game, _RECENT_GAME["id"])
         assert row.home_score == 3
 
     def test_refresh_recent_does_not_touch_game_outside_window(self, db):
         """refresh_recent_historical_games() leaves a game outside 30 days unchanged."""
-        db.session.add(NhlHistoricalGame(
+        db.session.add(Game(
             game_id=_OLD_GAME["id"],
             game_date=_OLD_DATE,
             home_score=2,
@@ -297,7 +297,7 @@ class TestRefreshRecentHistoricalGames:
             from services.historical import refresh_recent_historical_games
             refresh_recent_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, _OLD_GAME["id"])
+        row = db.session.get(Game, _OLD_GAME["id"])
         assert row.home_score == 2  # untouched
 
     def test_refresh_recent_idempotent_no_duplicates(self, db):
@@ -308,8 +308,8 @@ class TestRefreshRecentHistoricalGames:
             refresh_recent_historical_games()
 
         rows = db.session.scalars(
-            select(NhlHistoricalGame).where(
-                NhlHistoricalGame.game_id == _RECENT_GAME["id"]
+            select(Game).where(
+                Game.game_id == _RECENT_GAME["id"]
             )
         ).all()
         assert len(rows) == 1
@@ -324,7 +324,7 @@ class TestRefreshRecentHistoricalGames:
 
     def test_refresh_recent_unchanged_row_retains_original_value(self, db):
         """refresh_recent_historical_games() leaves a row untouched when API data matches DB."""
-        db.session.add(NhlHistoricalGame(
+        db.session.add(Game(
             game_id=_RECENT_GAME["id"],
             game_date=_RECENT_DATE,
             home_score=3,
@@ -336,7 +336,7 @@ class TestRefreshRecentHistoricalGames:
             from services.historical import refresh_recent_historical_games
             refresh_recent_historical_games()
 
-        row = db.session.get(NhlHistoricalGame, _RECENT_GAME["id"])
+        row = db.session.get(Game, _RECENT_GAME["id"])
         assert row.home_score == 3
         assert row.season == 20252026
 
@@ -346,13 +346,13 @@ class TestRefreshRecentHistoricalGames:
 class TestBackfillHistoricalCommand:
     def test_backfill_historical_command_inserts_rows_when_table_empty(self, app, db):
         """backfill-historical CLI command populates nhl_historical_game from an empty table."""
-        assert db.session.scalars(select(NhlHistoricalGame)).all() == []
+        assert db.session.scalars(select(Game)).all() == []
 
         with patch("nhl_client.get_all_games", return_value=[_GAME_1, _GAME_2]):
             result = app.test_cli_runner().invoke(args=["backfill-historical"])
 
         assert result.exit_code == 0
-        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        rows = db.session.scalars(select(Game)).all()
         assert len(rows) == 2
 
     def test_backfill_historical_command_idempotent_no_duplicates(self, app, db):
@@ -363,7 +363,7 @@ class TestBackfillHistoricalCommand:
             runner.invoke(args=["backfill-historical"])
             runner.invoke(args=["backfill-historical"])
 
-        rows = db.session.scalars(select(NhlHistoricalGame)).all()
+        rows = db.session.scalars(select(Game)).all()
         assert len(rows) == 1
 
     def test_backfill_historical_command_echoes_count(self, app, db):

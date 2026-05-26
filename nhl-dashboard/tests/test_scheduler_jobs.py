@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select
 
-from models import Game, Team, OddsSnapshot, ModelFair
+from models import LiveGame, Team, OddsSnapshot, ModelFair
 
 _FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -33,7 +33,7 @@ class TestPollSlate:
             from services.slate import refresh_schedule
             refresh_schedule()
 
-        games = db.session.scalars(select(Game)).all()
+        games = db.session.scalars(select(LiveGame)).all()
         assert len(games) == 2
 
     def test_refresh_schedule_upserts_referenced_team_rows(self, db):
@@ -54,7 +54,7 @@ class TestPollSlate:
             refresh_schedule()
             refresh_schedule()
 
-        games = db.session.scalars(select(Game)).all()
+        games = db.session.scalars(select(LiveGame)).all()
         assert len(games) == 2
 
     def test_refresh_schedule_idempotent_no_duplicate_team_rows(self, db):
@@ -154,7 +154,7 @@ class TestPollOdds:
     def _make_game_1001(self, db):
         """Create a Game with game_id=1001, which is present in odds_client._MOCK."""
         # Use a placeholder team code not needing FK enforcement
-        game = Game(
+        game = LiveGame(
             game_id=1001,
             away_code="TOR",
             home_code="BOS",
@@ -353,7 +353,7 @@ class TestPollScores:
         team_factory(code="FLA", name="Florida Panthers")
 
     def _make_game(self, db, game_id, status="scheduled"):
-        game = Game(
+        game = LiveGame(
             game_id=game_id,
             away_code="EDM",
             home_code="FLA",
@@ -463,7 +463,7 @@ class TestPollScores:
         db.session.refresh(game)
         assert game.status == "live"
         # New game row must be present
-        new_game = db.session.get(Game, 9999999999)
+        new_game = db.session.get(LiveGame, 9999999999)
         assert new_game is not None
 
     def test_refresh_scores_logs_info_for_new_game_id(self, db, team_factory, caplog):

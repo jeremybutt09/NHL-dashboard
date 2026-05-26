@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select
 
-from models import Game, Team
+from models import LiveGame, Team
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ def _seed_game(db, game_id=_GAME_ID, away_code="TOR", home_code="BOS",
                status="scheduled", period=None, clock=None,
                away_score=0, home_score=0, away_sog=None, home_sog=None):
     """Insert a Game row with specified values."""
-    game = Game(
+    game = LiveGame(
         game_id=game_id,
         away_code=away_code,
         home_code=home_code,
@@ -169,7 +169,7 @@ class TestRefreshScoresPreGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        return db.session.get(Game, _GAME_ID)
+        return db.session.get(LiveGame, _GAME_ID)
 
     def test_refresh_scores_scheduled_status_is_scheduled(self, db, team_factory):
         """Pre-game gameState FUT → status 'scheduled'."""
@@ -232,7 +232,7 @@ class TestRefreshScoresPreGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.away_sog is None
         assert game.home_sog is None
 
@@ -251,7 +251,7 @@ class TestRefreshScoresLiveGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        return db.session.get(Game, _GAME_ID)
+        return db.session.get(LiveGame, _GAME_ID)
 
     def test_refresh_scores_live_status_is_live(self, db, team_factory):
         """gameState LIVE → status 'live'."""
@@ -311,7 +311,7 @@ class TestRefreshScoresFinalGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        return db.session.get(Game, _GAME_ID)
+        return db.session.get(LiveGame, _GAME_ID)
 
     def test_refresh_scores_final_status_off_is_final(self, db, team_factory):
         """gameState OFF → status 'final'."""
@@ -349,14 +349,14 @@ class TestRefreshScoresUpsertNewGame:
         team_factory("TOR", "Toronto Maple Leafs")
         team_factory("BOS", "Boston Bruins")
 
-        assert db.session.get(Game, _GAME_ID) is None
+        assert db.session.get(LiveGame, _GAME_ID) is None
 
         with patch("nhl_client.get_score_now", return_value=_SCORE_NOW_FUT), \
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game is not None
 
     def test_refresh_scores_new_game_sets_away_code(self, db, team_factory):
@@ -369,7 +369,7 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.away_code == "TOR"
 
     def test_refresh_scores_new_game_sets_home_code(self, db, team_factory):
@@ -382,7 +382,7 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.home_code == "BOS"
 
     def test_refresh_scores_new_game_sets_start_est(self, db, team_factory):
@@ -395,7 +395,7 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.start_est is not None
         # 2026-05-25T23:00:00Z = 19:00 EDT (UTC-4 in May)
         assert game.start_est.hour == 19
@@ -410,7 +410,7 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.venue == "Scotiabank Arena"
 
     def test_refresh_scores_new_game_sets_game_date(self, db, team_factory):
@@ -423,7 +423,7 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game.game_date == "2026-05-25"
 
     def test_refresh_scores_upsert_is_idempotent(self, db, team_factory):
@@ -438,7 +438,7 @@ class TestRefreshScoresUpsertNewGame:
             refresh_scores()
 
         rows = db.session.scalars(
-            select(Game).where(Game.game_id == _GAME_ID)
+            select(LiveGame).where(LiveGame.game_id == _GAME_ID)
         ).all()
         assert len(rows) == 1
 
@@ -467,6 +467,6 @@ class TestRefreshScoresUpsertNewGame:
             from services.scores import refresh_scores
             refresh_scores()
 
-        game = db.session.get(Game, _GAME_ID)
+        game = db.session.get(LiveGame, _GAME_ID)
         assert game is not None
         assert game.away_code == "TOR"

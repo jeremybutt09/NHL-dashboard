@@ -10,7 +10,7 @@ All functions accept raw American odds integers (+120, -140, etc.).
 """
 from datetime import datetime, timezone
 from extensions import db
-from models import Game, OddsSnapshot, ModelFair
+from models import LiveGame, OddsSnapshot, ModelFair
 
 
 def american_to_implied(odds: int) -> float:
@@ -70,7 +70,7 @@ def compute_all_fair():
     from sqlalchemy import select
 
     today_games = db.session.scalars(
-        select(Game).where(Game.status.in_(['scheduled', 'live']))
+        select(LiveGame).where(LiveGame.status.in_(['scheduled', 'live']))
     ).all()
 
     now = datetime.now(timezone.utc)

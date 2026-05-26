@@ -1,7 +1,7 @@
 """Historical game ingestion from the NHL Stats REST API.
 
 Source: GET https://api.nhle.com/stats/rest/en/game
-Table:  nhl_historical_game (see models.NhlHistoricalGame)
+Table:  game (see models.Game — renamed from nhl_historical_game in Issue #131)
 
 Refresh cadence:
   - Full ingest: ingest_historical_games() — run once manually to backfill all history.
@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 import nhl_client
 from extensions import db
-from models import NhlHistoricalGame
+from models import Game
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def ingest_historical_games() -> int:
     """
     rows = nhl_client.get_all_games()
     for raw in rows:
-        record = NhlHistoricalGame(
+        record = Game(
             game_id=raw['id'],
             eastern_start_time=raw.get('easternStartTime'),
             game_date=raw.get('gameDate'),
@@ -53,11 +53,11 @@ def ingest_historical_games() -> int:
     return len(rows)
 
 
-def _fields_changed(existing: NhlHistoricalGame, raw: dict) -> bool:
+def _fields_changed(existing: Game, raw: dict) -> bool:
     """Return True if any mapped API field differs from the stored row.
 
     Args:
-        existing: The current NhlHistoricalGame row from the database.
+        existing: The current Game row from the database.
         raw: A game dict from the NHL Stats REST API response.
 
     Returns:
@@ -99,11 +99,11 @@ def refresh_recent_historical_games() -> int:
 
     # Load existing rows for the window into a dict keyed by game_id
     existing_ids = {g['id'] for g in recent}
-    existing_rows: dict[int, NhlHistoricalGame] = {}
+    existing_rows: dict[int, Game] = {}
     if existing_ids:
         rows_in_db = db.session.scalars(
-            db.select(NhlHistoricalGame).where(
-                NhlHistoricalGame.game_id.in_(existing_ids)
+            db.select(Game).where(
+                Game.game_id.in_(existing_ids)
             )
         ).all()
         existing_rows = {r.game_id: r for r in rows_in_db}
@@ -113,7 +113,7 @@ def refresh_recent_historical_games() -> int:
         game_id = raw['id']
         existing = existing_rows.get(game_id)
         if existing is None or _fields_changed(existing, raw):
-            record = NhlHistoricalGame(
+            record = Game(
                 game_id=game_id,
                 eastern_start_time=raw.get('easternStartTime'),
                 game_date=raw.get('gameDate'),

@@ -4,7 +4,7 @@ Live score service: updates period, clock, score, and SOG for in-progress games.
 from datetime import datetime, timezone
 
 from extensions import db
-from models import Game
+from models import LiveGame
 
 
 def refresh_live():
@@ -13,7 +13,7 @@ def refresh_live():
     from nhl_client import get_boxscore
 
     live_games = db.session.scalars(
-        select(Game).where(Game.status == 'live')
+        select(LiveGame).where(LiveGame.status == 'live')
     ).all()
 
     now = datetime.now(timezone.utc)
@@ -28,7 +28,7 @@ def refresh_live():
         db.session.commit()
 
 
-def _update_from_boxscore(g: Game, data: dict, now: datetime):
+def _update_from_boxscore(g: LiveGame, data: dict, now: datetime):
     """Parse NHL boxscore response and write to the Game row."""
     game_state = data.get('gameState', '')
     if game_state in ('FINAL', 'OFF'):

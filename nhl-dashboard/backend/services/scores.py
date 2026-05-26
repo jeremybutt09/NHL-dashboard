@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from extensions import db
-from models import Game, NhlOddsLine, NhlOddsPartner
+from models import LiveGame, NhlOddsLine, NhlOddsPartner
 
 _EASTERN = ZoneInfo("America/New_York")
 
@@ -57,7 +57,7 @@ def _parse_period(period_descriptor: dict) -> str:
     return ordinals.get(period_num, f'{period_num}th')
 
 
-def _update_game_from_score_data(game: Game, game_data: dict, now: datetime) -> None:
+def _update_game_from_score_data(game: LiveGame, game_data: dict, now: datetime) -> None:
     """Write score, period, clock, and state from one /v1/score/now game entry to the DB row.
 
     Handles three states:
@@ -105,7 +105,7 @@ def _update_game_from_score_data(game: Game, game_data: dict, now: datetime) -> 
 
 
 def _set_game_metadata_from_score_data(
-    game: Game, game_data: dict, all_teams: list, now: datetime
+    game: LiveGame, game_data: dict, all_teams: list, now: datetime
 ) -> None:
     """Populate metadata fields on a newly inserted Game row from /v1/score/now data.
 
@@ -226,7 +226,7 @@ def _insert_odds_lines(game_id: int, away_odds: list, home_odds: list, now: date
 def refresh_scores() -> None:
     """Fetch /v1/score/now and upsert all game rows in a single DB commit.
 
-    Acts as the single source of truth for game table population: game rows absent
+    Acts as the single source of truth for live_game table population: live_game rows absent
     from the DB are inserted using metadata from the /v1/score/now payload
     (startTimeUTC, venue, awayTeam, homeTeam).  get_all_teams() is called only when
     new rows need to be created, keeping the hot-path free of extra API calls.
@@ -251,7 +251,7 @@ def refresh_scores() -> None:
     api_ids = list(api_game_map.keys())
 
     db_games = db.session.scalars(
-        select(Game).where(Game.game_id.in_(api_ids))
+        select(LiveGame).where(LiveGame.game_id.in_(api_ids))
     ).all()
     db_game_map = {g.game_id: g for g in db_games}
 
@@ -267,7 +267,7 @@ def refresh_scores() -> None:
 
         for gid in new_ids:
             logger.info('[scores] Inserting new game row %s from /v1/score/now', gid)
-            game = Game(game_id=gid)
+            game = LiveGame(game_id=gid)
             # Populate metadata before add() so autoflush does not fire on a row
             # that still has start_est=None (which is NOT NULL in the schema).
             _set_game_metadata_from_score_data(game, api_game_map[gid], all_teams, now)

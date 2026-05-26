@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select
 
-from models import Team, Game
+from models import Team, LiveGame
 
 
 _STATS_TEAMS = [
@@ -168,7 +168,7 @@ class TestRefreshSlateEnsureTeam:
                 refresh_schedule()
 
         assert not any("Auto-appended" in r.message for r in caplog.records)
-        assert len(db.session.scalars(select(Game)).all()) == 1
+        assert len(db.session.scalars(select(LiveGame)).all()) == 1
 
     def test_refresh_schedule_unknown_team_found_in_stats_api(self, db, caplog):
         """refresh_schedule() auto-appends a full row for a missing team found in the stats API."""
@@ -200,7 +200,7 @@ class TestRefreshSlateEnsureTeam:
             "[slate] Auto-appended unrecognised team (no stats API match): ASW" in r.message
             for r in caplog.records
         )
-        assert len(db.session.scalars(select(Game)).all()) == 1
+        assert len(db.session.scalars(select(LiveGame)).all()) == 1
 
     def test_refresh_schedule_stats_api_failure_falls_back_gracefully(self, db, caplog):
         """refresh_schedule() logs an error and inserts minimal rows when get_all_teams() raises."""
@@ -214,7 +214,7 @@ class TestRefreshSlateEnsureTeam:
         tor = db.session.get(Team, "TOR")
         assert tor is not None
         assert tor.team_id is None
-        assert len(db.session.scalars(select(Game)).all()) == 1
+        assert len(db.session.scalars(select(LiveGame)).all()) == 1
         assert any(r.levelno == logging.ERROR for r in caplog.records)
 
     def test_refresh_schedule_calls_get_all_teams_once_per_refresh(self, db):
@@ -297,7 +297,7 @@ class TestRefreshSchedule:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026030205)
+        game = db.session.get(LiveGame, 2026030205)
         assert game is not None
         # Score was 3 in the API payload; refresh_schedule() must not write it.
         assert game.away_score in (None, 0)
@@ -313,7 +313,7 @@ class TestRefreshSchedule:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026030205)
+        game = db.session.get(LiveGame, 2026030205)
         assert game is not None
         # Score was 2 in the API payload; refresh_schedule() must not write it.
         assert game.home_score in (None, 0)
@@ -322,13 +322,13 @@ class TestRefreshSchedule:
         """refresh_schedule() inserts a new game row when a playoff game appears mid-day."""
         from services.slate import refresh_schedule
 
-        assert db.session.get(Game, 2026030205) is None
+        assert db.session.get(LiveGame, 2026030205) is None
 
         with patch("nhl_client.get_schedule_now", return_value=_SCHEDULE_NOW_PLAYOFF_GAME), \
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026030205)
+        game = db.session.get(LiveGame, 2026030205)
         assert game is not None
         assert game.away_code == "TOR"
         assert game.home_code == "BOS"
@@ -345,7 +345,7 @@ class TestRefreshSchedule:
             refresh_schedule()
 
         games = db.session.scalars(
-            select(Game).where(Game.game_id == 2026030205)
+            select(LiveGame).where(LiveGame.game_id == 2026030205)
         ).all()
         assert len(games) == 1
 
@@ -380,7 +380,7 @@ class TestRefreshSchedule:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026030205)
+        game = db.session.get(LiveGame, 2026030205)
         assert game.status == "live"
 
     def test_refresh_schedule_calls_ensure_team_for_all_teams(self, db, caplog):
@@ -436,7 +436,7 @@ class TestStartEstAndGameDate:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026010001)
+        game = db.session.get(LiveGame, 2026010001)
         assert game is not None
         assert game.start_est is not None
         # 23:00 UTC on 2026-05-24 = 19:00 EDT (UTC-4 in May)
@@ -450,7 +450,7 @@ class TestStartEstAndGameDate:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_schedule()
 
-        game = db.session.get(Game, 2026010001)
+        game = db.session.get(LiveGame, 2026010001)
         assert game.game_date == "2026-05-24"
 
     def test_refresh_slate_stores_start_est_as_eastern_time(self, db):
@@ -461,7 +461,7 @@ class TestStartEstAndGameDate:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_slate()
 
-        game = db.session.get(Game, 2026010001)
+        game = db.session.get(LiveGame, 2026010001)
         assert game is not None
         assert game.start_est is not None
         assert game.start_est.hour == 19
@@ -474,7 +474,7 @@ class TestStartEstAndGameDate:
              patch("nhl_client.get_all_teams", return_value=_STATS_TEAMS):
             refresh_slate()
 
-        game = db.session.get(Game, 2026010001)
+        game = db.session.get(LiveGame, 2026010001)
         assert game.game_date == "2026-05-24"
 
 
