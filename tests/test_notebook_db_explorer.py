@@ -623,3 +623,26 @@ def test_section8a_does_not_use_explicit_column_list():
     assert "away_sog, home_sog," not in src, (
         "Section 8a still uses explicit column list — replace with SELECT * (Issue #143)"
     )
+
+
+# ── Issue #145: No cell source may be stored character-per-item ──────────────
+
+
+def test_no_cell_has_character_per_item_source():
+    """Every cell source must contain complete lines, not one character per item.
+
+    A cell is corrupted when every non-empty item in its source list has length
+    <= 1 (single characters and lone newlines), making it unreadable in the
+    editor and unrunnable as code.  This catches the five+ cells broken by
+    Issue #145.
+    """
+    nb = _load_notebook()
+    corrupted = []
+    for i, cell in enumerate(nb.get("cells", [])):
+        src = cell.get("source", [])
+        if src and all(len(s.strip()) <= 1 for s in src):
+            corrupted.append((i, cell.get("id", "unknown")))
+    assert corrupted == [], (
+        f"Corrupted character-per-item source found in cells: {corrupted} "
+        "(Issue #145)"
+    )
