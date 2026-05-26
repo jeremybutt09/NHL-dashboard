@@ -611,3 +611,80 @@ class TestSection3Last10GamesQuery:
             text("SELECT game_id FROM live_game ORDER BY start_est DESC LIMIT 10")
         )
         assert result.fetchall() == []
+
+
+# ── Issue #141: Section 2b team-to-game join via team_id ─────────────────────
+
+
+class TestSection2bTeamGameJoin:
+    """Validates the corrected Section 2b SQL runs against the real game table schema."""
+
+    def test_section2b_join_resolves_team_names_via_team_id(self, db):
+        """Section 2b query joins game to team via team_id and returns full_name columns."""
+        from models import Team, Game
+
+        db.session.add(Team(
+            tri_code="TOR", name="Maple Leafs",
+            team_id=10, full_name="Toronto Maple Leafs",
+        ))
+        db.session.add(Team(
+            tri_code="BOS", name="Bruins",
+            team_id=6, full_name="Boston Bruins",
+        ))
+        db.session.add(Game(
+            game_id=2026020001,
+            visiting_team_id=10,
+            home_team_id=6,
+            season=20252026,
+            game_type=2,
+        ))
+        db.session.commit()
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
+                FROM game g
+                JOIN team t_away ON t_away.team_id = g.visiting_team_id
+                JOIN team t_home ON t_home.team_id = g.home_team_id
+                """
+            )
+        )
+        rows = result.fetchall()
+        assert len(rows) == 1
+        assert rows[0].away == "Toronto Maple Leafs"
+        assert rows[0].home == "Boston Bruins"
+
+    def test_section2b_join_empty_game_table_returns_zero_rows(self, db):
+        """Section 2b query on empty game table returns zero rows without error."""
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
+                FROM game g
+                JOIN team t_away ON t_away.team_id = g.visiting_team_id
+                JOIN team t_home ON t_home.team_id = g.home_team_id
+                """
+            )
+        )
+        assert result.fetchall() == []
+
+    def test_section2b_join_old_query_fails_on_game_schema(self, db):
+        """The old broken JOIN on away_code/home_code raises OperationalError against game table."""
+        import sqlite3 as _sqlite3
+        from sqlalchemy.exc import OperationalError
+
+        with pytest.raises(OperationalError):
+            conn = db.engine.connect()
+            conn.execute(
+                text(
+                    """
+                    SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
+                    FROM game g
+                    JOIN team t_away ON t_away.tri_code = g.away_code
+                    JOIN team t_home ON t_home.tri_code = g.home_code
+                    """
+                )
+            ).fetchall()

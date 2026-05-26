@@ -475,3 +475,68 @@ def test_notebook_section7_queries_game_not_nhl_historical_game():
         # Stop after Section 7's cells (when next section starts)
         if in_section7 and cell.get("cell_type") == "markdown" and "Section 8" in source:
             break
+
+
+# ── Issue #141: Section 2b team-to-game join must use team_id ────────────────
+
+
+def _get_section2b_code_source(nb: dict) -> str:
+    """Return source of the code cell immediately following the Section 2b markdown header."""
+    cells = nb.get("cells", [])
+    for i, cell in enumerate(cells):
+        source = "".join(cell.get("source", []))
+        if "Section 2b" in source and cell.get("cell_type") == "markdown":
+            for j in range(i + 1, len(cells)):
+                if cells[j].get("cell_type") == "code":
+                    return "".join(cells[j].get("source", []))
+    return ""
+
+
+def test_section2b_join_uses_visiting_team_id():
+    """Section 2b JOIN must reference visiting_team_id, not away_code (Issue #141)."""
+    nb = _load_notebook()
+    src = _get_section2b_code_source(nb)
+    assert src, "Section 2b code cell not found"
+    assert "visiting_team_id" in src, (
+        "Section 2b JOIN must use g.visiting_team_id (Issue #141)"
+    )
+
+
+def test_section2b_join_uses_home_team_id():
+    """Section 2b JOIN must reference home_team_id, not home_code (Issue #141)."""
+    nb = _load_notebook()
+    src = _get_section2b_code_source(nb)
+    assert src, "Section 2b code cell not found"
+    assert "home_team_id" in src, (
+        "Section 2b JOIN must use g.home_team_id (Issue #141)"
+    )
+
+
+def test_section2b_join_uses_team_id_column():
+    """Section 2b JOIN must join on team.team_id, not team.tri_code (Issue #141)."""
+    nb = _load_notebook()
+    src = _get_section2b_code_source(nb)
+    assert src, "Section 2b code cell not found"
+    assert "t_away.team_id" in src and "t_home.team_id" in src, (
+        "Section 2b JOIN must use t_away.team_id and t_home.team_id (Issue #141)"
+    )
+
+
+def test_section2b_join_does_not_use_away_code():
+    """Section 2b JOIN must not reference the non-existent away_code column (Issue #141)."""
+    nb = _load_notebook()
+    src = _get_section2b_code_source(nb)
+    assert src, "Section 2b code cell not found"
+    assert "away_code" not in src, (
+        "Section 2b JOIN still references away_code — game table has no such column (Issue #141)"
+    )
+
+
+def test_section2b_join_does_not_use_home_code():
+    """Section 2b JOIN must not reference the non-existent home_code column (Issue #141)."""
+    nb = _load_notebook()
+    src = _get_section2b_code_source(nb)
+    assert src, "Section 2b code cell not found"
+    assert "home_code" not in src, (
+        "Section 2b JOIN still references home_code — game table has no such column (Issue #141)"
+    )
