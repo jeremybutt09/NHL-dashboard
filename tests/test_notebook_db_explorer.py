@@ -312,14 +312,52 @@ def test_section3_code_has_no_games_today_label():
     )
 
 
-def test_section3_code_uses_order_by_start_est_desc():
-    """Section 3 code SQL must use ORDER BY start_est DESC."""
+def test_section3_code_uses_order_by_game_date_desc():
+    """Section 3 code SQL must use ORDER BY game_date DESC (game table has no start_est)."""
     nb = _load_notebook()
     _, code_cell = _get_section3_cells(nb)
     assert code_cell is not None, "Section 3 code cell not found"
     source = "".join(code_cell.get("source", []))
-    assert "start_est DESC" in source, (
-        "Section 3 SQL must ORDER BY start_est DESC (Issue #128)"
+    assert "game_date DESC" in source, (
+        "Section 3 SQL must ORDER BY game_date DESC — game table has game_date not start_est (Issue #142)"
+    )
+
+
+# ── Issue #142: Section 3 must use SELECT * and correct column references ──────
+
+
+def test_section3_code_uses_select_star():
+    """Section 3 code SQL must use SELECT * to avoid referencing dropped columns."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "SELECT *" in source, (
+        "Section 3 SQL must use SELECT * instead of a named column list (Issue #142)"
+    )
+
+
+def test_section3_code_does_not_reference_away_code():
+    """Section 3 code must not reference away_code — column does not exist in game table."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "away_code" not in source, (
+        "Section 3 still references away_code — game table has no such column; "
+        "use visiting_team_id instead (Issue #142)"
+    )
+
+
+def test_section3_code_does_not_reference_home_code():
+    """Section 3 code must not reference home_code — column does not exist in game table."""
+    nb = _load_notebook()
+    _, code_cell = _get_section3_cells(nb)
+    assert code_cell is not None, "Section 3 code cell not found"
+    source = "".join(code_cell.get("source", []))
+    assert "home_code" not in source, (
+        "Section 3 still references home_code — game table has no such column; "
+        "use home_team_id instead (Issue #142)"
     )
 
 
