@@ -578,3 +578,48 @@ def test_section2b_join_does_not_use_home_code():
     assert "home_code" not in src, (
         "Section 2b JOIN still references home_code — game table has no such column (Issue #141)"
     )
+
+
+# ── Issue #143: Section 8a must use SELECT * and filter out FUT game state ─────
+
+
+def _get_section8a_code_source(nb: dict) -> str:
+    """Return source of the code cell immediately following the Section 8a markdown header."""
+    cells = nb.get("cells", [])
+    for i, cell in enumerate(cells):
+        source = "".join(cell.get("source", []))
+        if "8a" in source and cell.get("cell_type") == "markdown":
+            for j in range(i + 1, len(cells)):
+                if cells[j].get("cell_type") == "code":
+                    return "".join(cells[j].get("source", []))
+    return ""
+
+
+def test_section8a_uses_select_star():
+    """Section 8a code SQL must use SELECT * to avoid breaking on schema changes."""
+    nb = _load_notebook()
+    src = _get_section8a_code_source(nb)
+    assert src, "Section 8a code cell not found"
+    assert "SELECT *" in src, (
+        "Section 8a SQL must use SELECT * instead of a named column list (Issue #143)"
+    )
+
+
+def test_section8a_filters_out_fut_game_state():
+    """Section 8a code SQL must filter out FUT rows so only completed/live games are shown."""
+    nb = _load_notebook()
+    src = _get_section8a_code_source(nb)
+    assert src, "Section 8a code cell not found"
+    assert "!= 'FUT'" in src or "<> 'FUT'" in src, (
+        "Section 8a SQL must filter out game_state = 'FUT' rows (Issue #143)"
+    )
+
+
+def test_section8a_does_not_use_explicit_column_list():
+    """Section 8a code cell must not use the old explicit column list."""
+    nb = _load_notebook()
+    src = _get_section8a_code_source(nb)
+    assert src, "Section 8a code cell not found"
+    assert "away_sog, home_sog," not in src, (
+        "Section 8a still uses explicit column list — replace with SELECT * (Issue #143)"
+    )

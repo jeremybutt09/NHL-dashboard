@@ -688,3 +688,110 @@ class TestSection2bTeamGameJoin:
                     """
                 )
             ).fetchall()
+
+
+# ── Issue #143: Section 8a boxscore query ─────────────────────────────────────
+
+
+class TestSection8aBoxscoreQuery:
+    """Validates the corrected Section 8a SQL runs against the real boxscore schema."""
+
+    def _seed(self, db):
+        from models import Boxscore
+
+        db.session.add(Boxscore(
+            game_id=2026020001,
+            game_date="2026-05-30",
+            game_state="FUT",
+            updated_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+        ))
+        db.session.add(Boxscore(
+            game_id=2026020002,
+            game_date="2026-05-25",
+            game_state="OFF",
+            away_name="Boston Bruins",
+            home_name="Toronto Maple Leafs",
+            away_score=3,
+            home_score=2,
+            updated_at=datetime(2026, 5, 25, 23, 0, tzinfo=timezone.utc),
+        ))
+        db.session.commit()
+
+    def test_section8a_query_excludes_fut_rows(self, db):
+        """Section 8a query must exclude rows where game_state = 'FUT'."""
+        self._seed(db)
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT *
+                FROM boxscore
+                WHERE game_state != 'FUT'
+                ORDER BY game_date DESC, game_id DESC
+                LIMIT 10
+                """
+            )
+        )
+        game_ids = [r.game_id for r in result.fetchall()]
+        assert 2026020001 not in game_ids
+
+    def test_section8a_query_includes_non_fut_rows(self, db):
+        """Section 8a query must include rows where game_state is not FUT."""
+        self._seed(db)
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT *
+                FROM boxscore
+                WHERE game_state != 'FUT'
+                ORDER BY game_date DESC, game_id DESC
+                LIMIT 10
+                """
+            )
+        )
+        game_ids = [r.game_id for r in result.fetchall()]
+        assert 2026020002 in game_ids
+
+    def test_section8a_query_returns_all_boxscore_columns(self, db):
+        """Section 8a SELECT * returns all columns including away_name and home_name."""
+        self._seed(db)
+
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT *
+                FROM boxscore
+                WHERE game_state != 'FUT'
+                ORDER BY game_date DESC, game_id DESC
+                LIMIT 10
+                """
+            )
+        )
+        rows = result.fetchall()
+        keys = list(result.keys())
+        assert "away_name" in keys
+        assert "home_name" in keys
+        assert "away_score" in keys
+        assert "home_score" in keys
+        assert len(rows) == 1
+        assert rows[0].away_name == "Boston Bruins"
+
+    def test_section8a_query_empty_table_returns_zero_rows(self, db):
+        """Section 8a query on empty boxscore table returns zero rows without error."""
+        conn = db.engine.connect()
+        result = conn.execute(
+            text(
+                """
+                SELECT *
+                FROM boxscore
+                WHERE game_state != 'FUT'
+                ORDER BY game_date DESC, game_id DESC
+                LIMIT 10
+                """
+            )
+        )
+        assert result.fetchall() == []
