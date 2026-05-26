@@ -54,6 +54,11 @@ def _refresh_historical():
     refresh_recent_historical_games()
 
 
+def _refresh_boxscores():
+    from services.boxscore import refresh_boxscores
+    refresh_boxscores()
+
+
 def start_scheduler(app):
     global _scheduler, _app, last_poll_time
     _app = app
@@ -67,7 +72,8 @@ def start_scheduler(app):
     _scheduler.add_job(_with_ctx(_compute_fair),       'interval', seconds=cfg['COMPUTE_FAIR_INTERVAL'], id='compute_fair',          replace_existing=True)
     _scheduler.add_job(_with_ctx(_prune_snapshots),    'interval', seconds=cfg['PRUNE_INTERVAL'],        id='prune',                 replace_existing=True)
     # Daily at 08:00 UTC — after overnight games have completed
-    _scheduler.add_job(_with_ctx(_refresh_historical), 'cron',     hour=8, minute=0,                    id='refresh_historical',    replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_historical), 'cron',     hour=8, minute=0,                           id='refresh_historical',    replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_boxscores),  'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'],      id='refresh_boxscores',     replace_existing=True)
 
     _scheduler.start()
 

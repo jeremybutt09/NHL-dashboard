@@ -17,6 +17,7 @@ class Config:
     POLL_SCORE_INTERVAL  = int(os.environ.get('POLL_SCORE_INTERVAL',  30))    # 30 sec
     POLL_ODDS_INTERVAL   = int(os.environ.get('POLL_ODDS_INTERVAL',   300))   # 5 min
     COMPUTE_FAIR_INTERVAL = int(os.environ.get('COMPUTE_FAIR_INTERVAL', 300)) # 5 min
-    PRUNE_INTERVAL       = int(os.environ.get('PRUNE_INTERVAL',       3600))  # 1 hr
+    PRUNE_INTERVAL          = int(os.environ.get('PRUNE_INTERVAL',          3600))  # 1 hr
+    POLL_BOXSCORE_INTERVAL  = int(os.environ.get('POLL_BOXSCORE_INTERVAL',  60))    # 60 sec
 
     SCHEDULER_API_ENABLED = False

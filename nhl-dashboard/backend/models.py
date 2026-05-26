@@ -117,6 +117,35 @@ class Game(db.Model):
         return f'<Game {self.game_id} season={self.season}>'
 
 
+class Boxscore(db.Model):
+    """Live boxscore for one NHL game, sourced from /v1/gamecenter/{id}/boxscore.
+
+    One row per game; upserted by game_id on each refresh so re-runs are
+    idempotent.  Live fields (score, SOG, period, clock) are overwritten on
+    every poll.  Sourced from Issue #133.
+    """
+    __tablename__ = 'boxscore'
+
+    game_id        = db.Column(db.Integer, primary_key=True)      # API: id
+    season_id      = db.Column(db.Integer)                        # API: season
+    game_type      = db.Column(db.Integer)                        # API: gameType
+    game_date      = db.Column(db.String(10), index=True)         # API: gameDate
+    venue          = db.Column(db.String(120))                    # API: venue.default
+    start_time_est = db.Column(db.DateTime)                       # API: startTimeUTC → ET
+    away_name      = db.Column(db.String(64))                     # API: awayTeam.name.default
+    home_name      = db.Column(db.String(64))                     # API: homeTeam.name.default
+    away_score     = db.Column(db.Integer)                        # API: awayTeam.score
+    home_score     = db.Column(db.Integer)                        # API: homeTeam.score
+    away_sog       = db.Column(db.Integer)                        # API: awayTeam.sog
+    home_sog       = db.Column(db.Integer)                        # API: homeTeam.sog
+    period         = db.Column(db.String(8))                      # parsed from periodDescriptor
+    clock          = db.Column(db.String(8))                      # API: clock.timeRemaining
+    updated_at     = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return f'<Boxscore {self.game_id} {self.away_name}@{self.home_name}>'
+
+
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 
