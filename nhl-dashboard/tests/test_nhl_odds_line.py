@@ -197,7 +197,8 @@ class TestInsertOddsLines:
         home_odds = [{"providerId": 7, "value": "+126"}]
 
         from services.scores import _insert_odds_lines
-        t1 = datetime(2026, 5, 24, 15, 0, 0, tzinfo=timezone.utc)
+        # Use tz-naive ET values (new convention: all freshness stamps are ET tz-naive)
+        t1 = datetime(2026, 5, 24, 11, 0, 0)
         _insert_odds_lines(game_id, away_odds, home_odds, t1)
         db.session.commit()
 
@@ -218,7 +219,8 @@ class TestInsertOddsLines:
         home_odds = [{"providerId": 7, "value": "+126"}]
 
         from services.scores import _insert_odds_lines
-        t1 = datetime(2026, 5, 24, 15, 0, 0, tzinfo=timezone.utc)
+        # Use tz-naive ET values (new convention: all freshness stamps are ET tz-naive)
+        t1 = datetime(2026, 5, 24, 11, 0, 0)
         _insert_odds_lines(game_id, away_odds, home_odds, t1)
         db.session.commit()
 

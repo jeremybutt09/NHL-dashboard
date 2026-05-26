@@ -96,6 +96,20 @@ def create_app(config_class=Config, test_config=None):
         count = backfill_boxscores(season=season)
         click.echo(f"Backfilled {count} boxscores.")
 
+    @app.cli.command("migrate-timestamps-to-et")
+    def migrate_timestamps_cmd():
+        """One-time migration (Issue #136): convert UTC freshness timestamps to Eastern Time.
+
+        Run once against a DB whose fetched_at / updated_at / computed_at columns
+        were written in UTC (the convention before this issue was implemented).
+        Re-running will incorrectly double-shift values — run exactly once.
+        """
+        from services.time_utils import migrate_timestamps_to_et
+        results = migrate_timestamps_to_et()
+        for table, count in sorted(results.items()):
+            click.echo(f"  {table}: {count} rows migrated")
+        click.echo("Migration complete.")
+
     @app.cli.command("migrate-game-table")
     def migrate_game_table_cmd():
         """Migration (Issue #131): DROP legacy game table, RENAME nhl_historical_game → game.

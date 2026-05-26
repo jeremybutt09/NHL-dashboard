@@ -11,6 +11,7 @@ All functions accept raw American odds integers (+120, -140, etc.).
 from datetime import datetime, timezone
 from extensions import db
 from models import LiveGame, OddsSnapshot, ModelFair
+from services.time_utils import now_et
 
 
 def american_to_implied(odds: int) -> float:
@@ -73,7 +74,7 @@ def compute_all_fair():
         select(LiveGame).where(LiveGame.status.in_(['scheduled', 'live']))
     ).all()
 
-    now = datetime.now(timezone.utc)
+    now = now_et()
     for g in today_games:
         snap = db.session.scalars(
             select(OddsSnapshot)

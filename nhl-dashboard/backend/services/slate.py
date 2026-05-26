@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from services.time_utils import now_et
+
 _EASTERN = ZoneInfo("America/New_York")
 
 from extensions import db
@@ -116,7 +118,7 @@ def refresh_schedule():
         return
 
     games = today_block.get('games', [])
-    now = datetime.now(timezone.utc)
+    now = now_et()
 
     for g in games:
         game_id = g.get('id')
@@ -136,7 +138,7 @@ def refresh_schedule():
             start_utc_dt = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
             start_est = start_utc_dt.astimezone(_EASTERN)
         except Exception:
-            start_est = now.astimezone(_EASTERN)
+            start_est = datetime.now(_EASTERN)
 
         game_state = g.get('gameState', 'FUT')
         if game_state in ('LIVE', 'CRIT'):
@@ -170,7 +172,7 @@ def refresh_schedule():
                 .order_by(OddsSnapshot.fetched_at.desc())
                 .limit(1)
             ).first()
-            if recent is None or (now - recent.fetched_at.replace(tzinfo=timezone.utc)).total_seconds() > 180:
+            if recent is None or (now - recent.fetched_at).total_seconds() > 180:
                 snap = OddsSnapshot(
                     game_id      = game_id,
                     fetched_at   = now,
@@ -219,7 +221,7 @@ def refresh_slate():
         return
 
     games = today_block.get('games', [])
-    now = datetime.now(timezone.utc)
+    now = now_et()
 
     for g in games:
         game_id = g.get('id')
@@ -245,7 +247,7 @@ def refresh_slate():
             start_utc_dt = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
             start_est = start_utc_dt.astimezone(_EASTERN)
         except Exception:
-            start_est = now.astimezone(_EASTERN)
+            start_est = datetime.now(_EASTERN)
 
         # Game status
         game_state = g.get('gameState', 'FUT')
@@ -284,7 +286,7 @@ def refresh_slate():
                 .limit(1)
             ).first()
             # Insert a new snapshot at most once per poll cycle (avoid duplicates)
-            if recent is None or (now - recent.fetched_at.replace(tzinfo=timezone.utc)).total_seconds() > 180:
+            if recent is None or (now - recent.fetched_at).total_seconds() > 180:
                 snap = OddsSnapshot(
                     game_id      = game_id,
                     fetched_at   = now,
@@ -312,7 +314,7 @@ def refresh_odds():
     # Only fetch for demo game IDs (the mock covers 1001–1008)
     demo_ids = list(_MOCK.keys())
     rows = fetch_odds(demo_ids)
-    now = datetime.now(timezone.utc)
+    now = now_et()
 
     for r in rows:
         snap = OddsSnapshot(
@@ -336,7 +338,7 @@ def prune_nhl_odds_lines():
     from sqlalchemy import delete
     from datetime import timedelta
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    cutoff = now_et() - timedelta(days=30)
     result = db.session.execute(
         delete(NhlOddsLine).where(NhlOddsLine.fetched_at < cutoff)
     )
@@ -349,7 +351,7 @@ def prune_old_snapshots():
     from sqlalchemy import delete
     from datetime import timedelta
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    cutoff = now_et() - timedelta(days=7)
     result = db.session.execute(
         delete(OddsSnapshot).where(OddsSnapshot.fetched_at < cutoff)
     )

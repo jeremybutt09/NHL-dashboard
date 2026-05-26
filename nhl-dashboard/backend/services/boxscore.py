@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 import nhl_client
 from extensions import db
 from models import Boxscore, Game
+from services.time_utils import now_et
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ def refresh_boxscores() -> int:
     if not game_ids:
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = now_et()
     count = 0
 
     for game_id in game_ids:
@@ -183,7 +184,7 @@ def backfill_boxscores(
         return 0
 
     total = len(game_ids)
-    now = datetime.now(timezone.utc)
+    now = now_et()
     count = 0
 
     for i, game_id in enumerate(game_ids):

@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 
 from extensions import db
 from models import Boxscore, DashboardGame
+from services.time_utils import now_et
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def refresh_dashboard_games() -> int:
     if not boxscores:
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = now_et()
     count = 0
 
     for bs in boxscores:

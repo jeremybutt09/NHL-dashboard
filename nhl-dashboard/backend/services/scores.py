@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from extensions import db
 from models import LiveGame, NhlOddsLine, NhlOddsPartner
+from services.time_utils import now_et
 
 _EASTERN = ZoneInfo("America/New_York")
 
@@ -209,8 +210,6 @@ def _insert_odds_lines(game_id: int, away_odds: list, home_odds: list, now: date
         ).first()
         if latest is not None:
             last_ts = latest.fetched_at
-            if last_ts.tzinfo is None:
-                last_ts = last_ts.replace(tzinfo=timezone.utc)
             if (now - last_ts).total_seconds() < _ODDS_COOLDOWN_SECONDS:
                 continue
 
@@ -255,7 +254,7 @@ def refresh_scores() -> None:
     ).all()
     db_game_map = {g.game_id: g for g in db_games}
 
-    now = datetime.now(timezone.utc)
+    now = now_et()
 
     new_ids = [gid for gid in api_ids if gid not in db_game_map]
     if new_ids:

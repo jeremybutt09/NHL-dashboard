@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from extensions import db
 from models import LiveGame
+from services.time_utils import now_et
 
 
 def refresh_live():
@@ -16,7 +17,7 @@ def refresh_live():
         select(LiveGame).where(LiveGame.status == 'live')
     ).all()
 
-    now = datetime.now(timezone.utc)
+    now = now_et()
     for g in live_games:
         try:
             data = get_boxscore(g.game_id)
