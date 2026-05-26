@@ -194,8 +194,8 @@ This table is intentionally independent of the `live_game` table — it uses int
 | `home_team_id` | `Integer` | `INTEGER` | — | `homeTeamId` | Numeric ID of the home team (matches `team.team_id` when seeded) |
 | `period` | `Integer` | `INTEGER` | — | `period` | Period at which the game ended or is currently in |
 | `season` | `Integer` | `INTEGER` | **INDEX** | `season` | Eight-digit season identifier (e.g. `20252026`) |
-| `visiting_score` | `Integer` | `INTEGER` | — | `visitingScore` | Visiting (away) team final or current score |
-| `visiting_team_id` | `Integer` | `INTEGER` | — | `visitingTeamId` | Numeric ID of the visiting (away) team |
+| `away_score` | `Integer` | `INTEGER` | — | `visitingScore` | Away team final or current score |
+| `away_team_id` | `Integer` | `INTEGER` | — | `visitingTeamId` | Numeric ID of the away team |
 
 **Upsert strategy:** `db.session.merge()` on `game_id` PK — idempotent; overwrites changed fields on repeated backfill runs. No pruning: this is a durable historical record.
 
@@ -299,6 +299,6 @@ game (game_id PK)   ← standalone historical; no FK to live_game or team
 - `odds_snapshot` has a many-to-one relationship with `live_game`: many snapshots per game (one per poll cycle per book).
 - `model_fair` has a one-to-one relationship with `live_game`: `game_id` is both the primary key and a foreign key.
 - `nhl_odds_line` has a many-to-one relationship with both `live_game` (via `game_id`) and `nhl_odds_partner` (via `partner_id`).
-- `game` is a **standalone** historical records table. Its `home_team_id` and `visiting_team_id` columns hold the same numeric IDs as `team.team_id` but are not enforced via FK constraints.
+- `game` is a **standalone** historical records table. Its `home_team_id` and `away_team_id` columns hold the same numeric IDs as `team.team_id` but are not enforced via FK constraints.
 - `boxscore` is a **standalone** table sourced from `GET /v1/gamecenter/{id}/boxscore`. Its `game_id` values correspond to IDs in the `game` table but there is no FK constraint.
 - `dashboard_game` is a **standalone** derived view of today's boxscores. Its rows are copied from `boxscore` by `refresh_dashboard_games()`.

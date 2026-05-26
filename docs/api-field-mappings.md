@@ -226,8 +226,8 @@ updated to `game` table name in Issue #131.
 | `data[].homeTeamId` | `home_team_id` | Integer; matches `team.team_id` when seeded |
 | `data[].period` | `period` | Integer period at game end or current period |
 | `data[].season` | `season` | Integer, e.g. `20252026` |
-| `data[].visitingScore` | `visiting_score` | Integer |
-| `data[].visitingTeamId` | `visiting_team_id` | Integer; matches `team.team_id` when seeded |
+| `data[].visitingScore` | `away_score` | Integer |
+| `data[].visitingTeamId` | `away_team_id` | Integer; matches `team.team_id` when seeded |
 
 ### Ignored / unused fields from the Stats REST `/game` endpoint
 

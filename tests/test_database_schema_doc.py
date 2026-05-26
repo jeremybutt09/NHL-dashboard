@@ -65,3 +65,23 @@ def test_no_migrations_note_present():
     """Doc must note that schema changes require manual model edits (no migrations)."""
     text = _doc_text()
     assert "migration" in text.lower(), "No migrations note found in schema doc"
+
+
+# ── Issue #146: visiting_ → away_ column rename ────────────────────────────────
+
+def test_game_table_no_visiting_columns():
+    """game table section must not reference visiting_score or visiting_team_id (Issue #146)."""
+    text = _doc_text()
+    assert "visiting_score" not in text, \
+        "Stale visiting_score column name in database-schema.md — rename to away_score (Issue #146)"
+    assert "visiting_team_id" not in text, \
+        "Stale visiting_team_id column name in database-schema.md — rename to away_team_id (Issue #146)"
+
+
+def test_game_table_documents_away_columns():
+    """game table section must document away_score and away_team_id columns (Issue #146)."""
+    text = _doc_text()
+    assert "away_score" in text, \
+        "away_score column missing from database-schema.md game table (Issue #146)"
+    assert "away_team_id" in text, \
+        "away_team_id column missing from database-schema.md game table (Issue #146)"

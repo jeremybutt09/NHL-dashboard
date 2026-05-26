@@ -111,3 +111,23 @@ def test_no_nhl_historical_game_reference():
     text = _doc_text()
     assert "nhl_historical_game" not in text, \
         "Stale nhl_historical_game reference found in api-response-examples.md"
+
+
+# ── Issue #146: visiting_ → away_ column rename ────────────────────────────────
+
+def test_no_visiting_db_column_names():
+    """api-response-examples.md must not reference visiting_score or visiting_team_id as DB columns (Issue #146)."""
+    text = _doc_text()
+    assert "visiting_score" not in text, \
+        "Stale visiting_score DB column name in api-response-examples.md — rename to away_score (Issue #146)"
+    assert "visiting_team_id" not in text, \
+        "Stale visiting_team_id DB column name in api-response-examples.md — rename to away_team_id (Issue #146)"
+
+
+def test_nhl_stats_api_section_uses_away_column_names():
+    """api-response-examples.md must document away_score and away_team_id as DB columns (Issue #146)."""
+    text = _doc_text()
+    assert "away_score" in text, \
+        "away_score DB column missing from api-response-examples.md (Issue #146)"
+    assert "away_team_id" in text, \
+        "away_team_id DB column missing from api-response-examples.md (Issue #146)"

@@ -286,8 +286,8 @@ Returns the full historical game set. Consumed by `get_all_games()` in
 | `homeTeamId` | `integer` | `home_team_id` | Matches `team.team_id` when seeded |
 | `period` | `integer` | `period` | Period at game end or current period |
 | `season` | `integer` | `season` | e.g. `20252026` |
-| `visitingScore` | `integer` | `visiting_score` | — |
-| `visitingTeamId` | `integer` | `visiting_team_id` | Matches `team.team_id` when seeded |
+| `visitingScore` | `integer` | `away_score` | — |
+| `visitingTeamId` | `integer` | `away_team_id` | Matches `team.team_id` when seeded |
 | `total` | `integer` | not stored | Pagination envelope field — row count only |
 
 ---

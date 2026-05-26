@@ -171,3 +171,23 @@ def test_ignored_recap_link_fields_documented():
     text = _doc_text()
     for field in ("threeMinRecap", "condensedGame", "gameCenterLink", "seriesUrl"):
         assert field in text, f"Ignored field '{field}' not documented"
+
+
+# ── Issue #146: visiting_ → away_ column rename ────────────────────────────────
+
+def test_no_visiting_column_names():
+    """api-field-mappings.md must not reference visiting_score or visiting_team_id (Issue #146)."""
+    text = _doc_text()
+    assert "visiting_score" not in text, \
+        "Stale visiting_score in api-field-mappings.md — rename to away_score (Issue #146)"
+    assert "visiting_team_id" not in text, \
+        "Stale visiting_team_id in api-field-mappings.md — rename to away_team_id (Issue #146)"
+
+
+def test_game_table_maps_visiting_api_fields_to_away_columns():
+    """api-field-mappings.md must map visitingScore/visitingTeamId to away_score/away_team_id (Issue #146)."""
+    text = _doc_text()
+    assert "away_score" in text, \
+        "away_score column mapping missing from api-field-mappings.md (Issue #146)"
+    assert "away_team_id" in text, \
+        "away_team_id column mapping missing from api-field-mappings.md (Issue #146)"
