@@ -343,3 +343,135 @@ def test_section3_code_has_no_today_date_filter():
     assert "LIKE :today" not in source, (
         "Section 3 must not filter by today's date — show last 10 regardless (Issue #128)"
     )
+
+
+# ── Issue #139: EXPECTED_TABLES must reflect current schema ──────────────────
+
+def _get_section1_code_source(nb: dict) -> str:
+    """Return the source of the first code cell (Section 1 setup cell)."""
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") == "code":
+            return "".join(cell.get("source", []))
+    return ""
+
+
+def _get_section6_code_source(nb: dict) -> str:
+    """Return the source of the Section 6 pipeline-check code cell."""
+    cells = nb.get("cells", [])
+    for i, cell in enumerate(cells):
+        source = "".join(cell.get("source", []))
+        if "Section 6" in source and cell.get("cell_type") == "markdown":
+            for j in range(i + 1, len(cells)):
+                if cells[j].get("cell_type") == "code":
+                    return "".join(cells[j].get("source", []))
+    return ""
+
+
+def test_section1_expected_tables_excludes_nhl_historical_game():
+    """Section 1 EXPECTED_TABLES must not include nhl_historical_game (renamed to game in #131)."""
+    nb = _load_notebook()
+    src = _get_section1_code_source(nb)
+    assert "EXPECTED_TABLES" in src, "EXPECTED_TABLES not found in Section 1"
+    # Extract the set literal — look for nhl_historical_game appearing inside EXPECTED_TABLES
+    assert '"nhl_historical_game"' not in src and "'nhl_historical_game'" not in src, (
+        "Section 1 EXPECTED_TABLES still contains nhl_historical_game — "
+        "replace with game, boxscore, dashboard_game (Issue #139)"
+    )
+
+
+def test_section1_expected_tables_includes_boxscore():
+    """Section 1 EXPECTED_TABLES must include boxscore (Issue #139)."""
+    nb = _load_notebook()
+    src = _get_section1_code_source(nb)
+    assert '"boxscore"' in src or "'boxscore'" in src, (
+        "Section 1 EXPECTED_TABLES must include boxscore (Issue #139)"
+    )
+
+
+def test_section1_expected_tables_includes_dashboard_game():
+    """Section 1 EXPECTED_TABLES must include dashboard_game (Issue #139)."""
+    nb = _load_notebook()
+    src = _get_section1_code_source(nb)
+    assert '"dashboard_game"' in src or "'dashboard_game'" in src, (
+        "Section 1 EXPECTED_TABLES must include dashboard_game (Issue #139)"
+    )
+
+
+def test_section6_expected_tables_excludes_nhl_historical_game():
+    """Section 6 EXPECTED_TABLES must not include nhl_historical_game (Issue #139)."""
+    nb = _load_notebook()
+    src = _get_section6_code_source(nb)
+    assert "EXPECTED_TABLES" in src, "EXPECTED_TABLES not found in Section 6"
+    assert '"nhl_historical_game"' not in src and "'nhl_historical_game'" not in src, (
+        "Section 6 EXPECTED_TABLES still contains nhl_historical_game (Issue #139)"
+    )
+
+
+def test_section6_expected_tables_includes_boxscore():
+    """Section 6 EXPECTED_TABLES must include boxscore (Issue #139)."""
+    nb = _load_notebook()
+    src = _get_section6_code_source(nb)
+    assert '"boxscore"' in src or "'boxscore'" in src, (
+        "Section 6 EXPECTED_TABLES must include boxscore (Issue #139)"
+    )
+
+
+def test_section6_expected_tables_includes_dashboard_game():
+    """Section 6 EXPECTED_TABLES must include dashboard_game (Issue #139)."""
+    nb = _load_notebook()
+    src = _get_section6_code_source(nb)
+    assert '"dashboard_game"' in src or "'dashboard_game'" in src, (
+        "Section 6 EXPECTED_TABLES must include dashboard_game (Issue #139)"
+    )
+
+
+def test_notebook_has_boxscore_section():
+    """Notebook must include a dedicated explorer section for the boxscore table (Issue #139)."""
+    nb = _load_notebook()
+    full_text = _all_cell_sources(nb)
+    assert "boxscore" in full_text.lower(), "No boxscore section found in notebook (Issue #139)"
+    # Must have a markdown header for it
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") == "markdown":
+            source = "".join(cell.get("source", []))
+            if "boxscore" in source.lower() and (
+                "##" in source or "Section" in source
+            ):
+                return
+    raise AssertionError(
+        "No markdown section header for boxscore table found in notebook (Issue #139)"
+    )
+
+
+def test_notebook_has_dashboard_game_section():
+    """Notebook must include a dedicated explorer section for the dashboard_game table (Issue #139)."""
+    nb = _load_notebook()
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") == "markdown":
+            source = "".join(cell.get("source", []))
+            if "dashboard_game" in source.lower() and (
+                "##" in source or "Section" in source
+            ):
+                return
+    raise AssertionError(
+        "No markdown section header for dashboard_game table found in notebook (Issue #139)"
+    )
+
+
+def test_notebook_section7_queries_game_not_nhl_historical_game():
+    """Section 7 must query the `game` table, not nhl_historical_game (Issue #139)."""
+    nb = _load_notebook()
+    cells = nb.get("cells", [])
+    in_section7 = False
+    for cell in cells:
+        source = "".join(cell.get("source", []))
+        if "Section 7" in source:
+            in_section7 = True
+        if in_section7 and cell.get("cell_type") == "code":
+            assert "nhl_historical_game" not in source, (
+                "Section 7 code cell still references nhl_historical_game — "
+                "update to use game table (Issue #139)"
+            )
+        # Stop after Section 7's cells (when next section starts)
+        if in_section7 and cell.get("cell_type") == "markdown" and "Section 8" in source:
+            break
