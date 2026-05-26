@@ -26,6 +26,7 @@ _BOXSCORE_API = {
     "season": 20252026,
     "gameType": 3,
     "gameDate": _TODAY,
+    "gameState": "LIVE",
     "venue": {"default": "Scotiabank Arena"},
     "startTimeUTC": f"{_TODAY}T23:00:00Z",
     "awayTeam": {
@@ -286,3 +287,60 @@ class TestRefreshBoxscores:
 
         mock_get.assert_not_called()
         assert count == 0
+
+    def test_refresh_boxscores_maps_team_abbrevs(self, db):
+        """refresh_boxscores() stores away_abbrev and home_abbrev from the API."""
+        self._seed_game(db)
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API):
+            from services.boxscore import refresh_boxscores
+            refresh_boxscores()
+
+        row = db.session.get(Boxscore, _GAME_ID)
+        assert row.away_abbrev == "TOR"
+        assert row.home_abbrev == "BOS"
+
+    def test_refresh_boxscores_maps_game_state(self, db):
+        """refresh_boxscores() stores game_state from the API gameState field."""
+        self._seed_game(db)
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API):
+            from services.boxscore import refresh_boxscores
+            refresh_boxscores()
+
+        row = db.session.get(Boxscore, _GAME_ID)
+        assert row.game_state == "LIVE"
+
+
+class TestBoxscoreModelAbbrevGameState:
+    """Tests for the away_abbrev, home_abbrev, and game_state columns (Issue #134)."""
+
+    def test_boxscore_model_stores_abbrev_fields(self, db):
+        """Boxscore row persists away_abbrev and home_abbrev."""
+        from datetime import datetime, timezone
+        row = Boxscore(
+            game_id=_GAME_ID,
+            away_abbrev="TOR",
+            home_abbrev="BOS",
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(row)
+        db.session.commit()
+
+        retrieved = db.session.get(Boxscore, _GAME_ID)
+        assert retrieved.away_abbrev == "TOR"
+        assert retrieved.home_abbrev == "BOS"
+
+    def test_boxscore_model_stores_game_state(self, db):
+        """Boxscore row persists game_state."""
+        from datetime import datetime, timezone
+        row = Boxscore(
+            game_id=_GAME_ID,
+            game_state="FINAL",
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(row)
+        db.session.commit()
+
+        retrieved = db.session.get(Boxscore, _GAME_ID)
+        assert retrieved.game_state == "FINAL"

@@ -89,13 +89,16 @@ def _build_boxscore(raw: dict, now: datetime) -> Boxscore:
         venue=venue,
         start_time_est=start_est,
         away_name=away_name,
+        away_abbrev=away.get('abbrev'),
         home_name=home_name,
+        home_abbrev=home.get('abbrev'),
         away_score=away.get('score'),
         home_score=home.get('score'),
         away_sog=away.get('sog'),
         home_sog=home.get('sog'),
         period=period,
         clock=clock,
+        game_state=raw.get('gameState'),
         updated_at=now,
     )
 

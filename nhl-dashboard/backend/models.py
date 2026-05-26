@@ -133,17 +133,50 @@ class Boxscore(db.Model):
     venue          = db.Column(db.String(120))                    # API: venue.default
     start_time_est = db.Column(db.DateTime)                       # API: startTimeUTC → ET
     away_name      = db.Column(db.String(64))                     # API: awayTeam.name.default
+    away_abbrev    = db.Column(db.String(8))                      # API: awayTeam.abbrev
     home_name      = db.Column(db.String(64))                     # API: homeTeam.name.default
+    home_abbrev    = db.Column(db.String(8))                      # API: homeTeam.abbrev
     away_score     = db.Column(db.Integer)                        # API: awayTeam.score
     home_score     = db.Column(db.Integer)                        # API: homeTeam.score
     away_sog       = db.Column(db.Integer)                        # API: awayTeam.sog
     home_sog       = db.Column(db.Integer)                        # API: homeTeam.sog
     period         = db.Column(db.String(8))                      # parsed from periodDescriptor
     clock          = db.Column(db.String(8))                      # API: clock.timeRemaining
+    game_state     = db.Column(db.String(8))                      # API: gameState ('FUT','PRE','LIVE','CRIT','FINAL','OFF')
     updated_at     = db.Column(db.DateTime)
 
     def __repr__(self):
         return f'<Boxscore {self.game_id} {self.away_name}@{self.home_name}>'
+
+
+class DashboardGame(db.Model):
+    """Today's app-ready game view, derived from the boxscore table.
+
+    Populated by refresh_dashboard_games() on the same cadence as
+    refresh_boxscores().  One row per game; only today's games are written.
+    Serves as the single data source for /api/games/today (Issue #134).
+    """
+    __tablename__ = 'dashboard_game'
+
+    game_id        = db.Column(db.Integer, primary_key=True)      # NHL gamePk
+    game_date      = db.Column(db.String(10), index=True)         # e.g. "2026-05-25"
+    venue          = db.Column(db.String(120))
+    start_time_est = db.Column(db.DateTime)                       # converted from UTC
+    away_name      = db.Column(db.String(64))
+    away_abbrev    = db.Column(db.String(8))
+    home_name      = db.Column(db.String(64))
+    home_abbrev    = db.Column(db.String(8))
+    away_score     = db.Column(db.Integer)
+    home_score     = db.Column(db.Integer)
+    away_sog       = db.Column(db.Integer)
+    home_sog       = db.Column(db.Integer)
+    period         = db.Column(db.String(8))                      # '1st','2nd','3rd','OT','SO'
+    clock          = db.Column(db.String(8))                      # time remaining
+    status         = db.Column(db.String(16))                     # 'scheduled'|'live'|'final'
+    updated_at     = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return f'<DashboardGame {self.game_id} {self.away_abbrev}@{self.home_abbrev}>'
 
 
 class NhlOddsLine(db.Model):
