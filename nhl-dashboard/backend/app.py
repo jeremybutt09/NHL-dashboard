@@ -1,5 +1,6 @@
 import logging
 import os
+import click
 from flask import Flask
 from extensions import db
 from config import Config
@@ -83,6 +84,17 @@ def create_app(config_class=Config, test_config=None):
         from services.historical import ingest_historical_games
         count = ingest_historical_games()
         click.echo(f"Backfilled {count} historical games.")
+
+    @app.cli.command("backfill-boxscores")
+    @click.option(
+        "--season", type=int, default=None,
+        help="Limit to one season, e.g. 20252026.  Omit to process all games.",
+    )
+    def backfill_boxscores_cmd(season):
+        """One-time backfill: upsert boxscores for all games in the game table (Issue #135)."""
+        from services.boxscore import backfill_boxscores
+        count = backfill_boxscores(season=season)
+        click.echo(f"Backfilled {count} boxscores.")
 
     @app.cli.command("migrate-game-table")
     def migrate_game_table_cmd():

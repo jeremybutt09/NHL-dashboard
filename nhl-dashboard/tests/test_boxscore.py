@@ -1,4 +1,5 @@
-"""Tests for Boxscore model and refresh_boxscores() service (Issue #133).
+"""Tests for Boxscore model, refresh_boxscores(), and backfill_boxscores()
+service (Issues #133, #135).
 
 Acceptance criteria:
   - boxscore table contains one row per game with game_id, season_id, gameType,
@@ -6,6 +7,9 @@ Acceptance criteria:
     period, and clock.
   - Re-runs upsert existing rows rather than appending duplicates.
   - Background job fetches today's game IDs from the game table.
+  - backfill_boxscores() processes ALL game IDs in the game table (not just
+    today), is idempotent via upsert, skips individual failures, and returns
+    a count of successfully upserted rows.
 """
 from datetime import date
 from unittest.mock import patch
@@ -344,3 +348,182 @@ class TestBoxscoreModelAbbrevGameState:
 
         retrieved = db.session.get(Boxscore, _GAME_ID)
         assert retrieved.game_state == "FINAL"
+
+
+# ── backfill_boxscores ────────────────────────────────────────────────────────
+
+class TestBackfillBoxscores:
+    """Tests for backfill_boxscores() — Issue #135."""
+
+    def _seed_games(self, db, game_ids, game_date="2020-01-15"):
+        for gid in game_ids:
+            db.session.add(Game(game_id=gid, game_date=game_date))
+        db.session.commit()
+
+    def test_backfill_boxscores_processes_all_game_table_entries(self, db):
+        """backfill_boxscores() fetches a boxscore for every row in the game table."""
+        self._seed_games(db, [1001, 1002, 1003])
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 3
+        for gid in [1001, 1002, 1003]:
+            assert db.session.get(Boxscore, gid) is not None
+
+    def test_backfill_boxscores_includes_non_today_games(self, db):
+        """backfill_boxscores() processes historical games (not filtered to today)."""
+        self._seed_games(db, [9000002], game_date="2020-01-01")
+
+        with patch("nhl_client.get_boxscore", return_value=dict(_BOXSCORE_API, id=9000002)), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, 9000002) is not None
+
+    def test_backfill_boxscores_idempotent_no_duplicates(self, db):
+        """Running backfill_boxscores() twice leaves exactly one boxscore per game."""
+        self._seed_games(db, [_GAME_ID])
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            backfill_boxscores()
+            backfill_boxscores()
+
+        rows = db.session.scalars(
+            select(Boxscore).where(Boxscore.game_id == _GAME_ID)
+        ).all()
+        assert len(rows) == 1
+
+    def test_backfill_boxscores_skips_game_on_api_failure(self, db):
+        """backfill_boxscores() continues past an individual API failure."""
+        self._seed_games(db, [_GAME_ID, _GAME_ID + 1])
+
+        def side_effect(game_id):
+            if game_id == _GAME_ID:
+                raise RuntimeError("API timeout")
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=side_effect), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, _GAME_ID) is None
+        assert db.session.get(Boxscore, _GAME_ID + 1) is not None
+
+    def test_backfill_boxscores_returns_count(self, db):
+        """backfill_boxscores() returns the number of successfully upserted rows."""
+        self._seed_games(db, [_GAME_ID])
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 1
+
+    def test_backfill_boxscores_empty_game_table_returns_zero(self, db):
+        """backfill_boxscores() returns 0 and never calls the API when game table is empty."""
+        with patch("nhl_client.get_boxscore") as mock_get, \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        mock_get.assert_not_called()
+        assert count == 0
+
+    def test_backfill_boxscores_maps_fields_correctly(self, db):
+        """backfill_boxscores() maps every API field to the correct DB column."""
+        self._seed_games(db, [_GAME_ID], game_date="2026-01-10")
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            backfill_boxscores()
+
+        row = db.session.get(Boxscore, _GAME_ID)
+        assert row.season_id == 20252026
+        assert row.game_type == 3
+        assert row.venue == "Scotiabank Arena"
+        assert row.away_name == "Toronto Maple Leafs"
+        assert row.home_name == "Boston Bruins"
+        assert row.away_score == 2
+        assert row.home_score == 1
+        assert row.away_sog == 14
+        assert row.home_sog == 18
+
+    def test_backfill_boxscores_season_filter_skips_other_seasons(self, db):
+        """backfill_boxscores(season=N) skips games whose season column differs."""
+        db.session.add(Game(game_id=2001, game_date="2026-01-01", season=20252026))
+        db.session.add(Game(game_id=2002, game_date="2025-01-01", season=20242025))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(season=20252026)
+
+        assert count == 1
+        assert db.session.get(Boxscore, 2001) is not None
+        assert db.session.get(Boxscore, 2002) is None
+
+
+# ── backfill-boxscores CLI command ────────────────────────────────────────────
+
+class TestBackfillBoxscoresCommand:
+    """Tests for the backfill-boxscores Flask CLI command — Issue #135."""
+
+    def test_backfill_boxscores_command_inserts_rows(self, app, db):
+        """backfill-boxscores CLI command upserts boxscores for all games in the table."""
+        from models import Game
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(args=["backfill-boxscores"])
+
+        assert result.exit_code == 0
+        assert db.session.get(Boxscore, _GAME_ID) is not None
+
+    def test_backfill_boxscores_command_echoes_count(self, app, db):
+        """backfill-boxscores CLI command prints the number of boxscores upserted."""
+        from models import Game
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(args=["backfill-boxscores"])
+
+        assert "1" in result.output
+
+    def test_backfill_boxscores_command_idempotent(self, app, db):
+        """Running backfill-boxscores twice leaves exactly one row per game."""
+        from models import Game
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.commit()
+
+        runner = app.test_cli_runner()
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            runner.invoke(args=["backfill-boxscores"])
+            runner.invoke(args=["backfill-boxscores"])
+
+        rows = db.session.scalars(
+            select(Boxscore).where(Boxscore.game_id == _GAME_ID)
+        ).all()
+        assert len(rows) == 1

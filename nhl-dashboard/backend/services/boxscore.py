@@ -8,8 +8,12 @@ APScheduler, so live score/SOG/period data stays current during games.
 
 Today's game IDs are resolved by querying the `game` table, which is
 populated by the historical ingest pipeline (models.Game).
+
+backfill_boxscores() (Issue #135) is a one-time (but re-runnable) operation
+that fetches a boxscore for every game_id in the `game` table, not just today.
 """
 import logging
+import time
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -139,4 +143,68 @@ def refresh_boxscores() -> int:
 
     db.session.commit()
     logger.info('[boxscore] Upserted %d boxscores for %s', count, today)
+    return count
+
+
+# 300 ms between requests — polite rate-limiting for long backfill runs.
+_BACKFILL_DELAY_SECONDS: float = 0.3
+
+
+def backfill_boxscores(
+    delay: float = _BACKFILL_DELAY_SECONDS,
+    season: int | None = None,
+) -> int:
+    """Fetch and upsert boxscore data for every game in the game table.
+
+    One-time (but re-runnable) backfill.  Iterates game_ids in the
+    ``game`` table (optionally filtered to a single season), calls
+    ``/v1/gamecenter/{id}/boxscore`` for each, and upserts the result.
+    API failures for individual games are logged and skipped so a single
+    bad game does not abort the run.  Commits in batches of 100 to bound
+    transaction size.
+
+    Args:
+        delay: Seconds to sleep between successive API calls.  Defaults to
+            ``_BACKFILL_DELAY_SECONDS`` (0.3 s).  Pass ``0`` in tests to
+            keep runs fast.
+        season: Optional season integer (e.g. ``20252026``).  When set, only
+            games whose ``season`` column matches are processed.  Omit or
+            pass ``None`` to process the full table.
+
+    Returns:
+        Number of boxscores successfully upserted.
+    """
+    query = db.select(Game.game_id)
+    if season is not None:
+        query = query.where(Game.season == season)
+    game_ids = db.session.scalars(query).all()
+
+    if not game_ids:
+        return 0
+
+    total = len(game_ids)
+    now = datetime.now(timezone.utc)
+    count = 0
+
+    for i, game_id in enumerate(game_ids):
+        try:
+            raw = nhl_client.get_boxscore(game_id)
+        except Exception as exc:
+            logger.warning('[backfill_boxscores] Failed to fetch game %s: %s', game_id, exc)
+            time.sleep(delay)
+            continue
+
+        record = _build_boxscore(raw, now)
+        db.session.merge(record)
+        count += 1
+
+        # Commit every 100 rows to avoid holding an unbounded transaction.
+        if (i + 1) % 100 == 0:
+            db.session.commit()
+            logger.info('[backfill_boxscores] Progress: %d/%d', i + 1, total)
+
+        time.sleep(delay)
+
+    db.session.commit()
+    logger.info('[backfill_boxscores] Upserted %d/%d boxscores', count, total)
     return count
