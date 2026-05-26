@@ -633,7 +633,7 @@ class TestSection2bTeamGameJoin:
         ))
         db.session.add(Game(
             game_id=2026020001,
-            visiting_team_id=10,
+            away_team_id=10,
             home_team_id=6,
             season=20252026,
             game_type=2,
@@ -646,7 +646,7 @@ class TestSection2bTeamGameJoin:
                 """
                 SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
                 FROM game g
-                JOIN team t_away ON t_away.team_id = g.visiting_team_id
+                JOIN team t_away ON t_away.team_id = g.away_team_id
                 JOIN team t_home ON t_home.team_id = g.home_team_id
                 """
             )
@@ -664,7 +664,7 @@ class TestSection2bTeamGameJoin:
                 """
                 SELECT g.game_id, t_away.full_name AS away, t_home.full_name AS home
                 FROM game g
-                JOIN team t_away ON t_away.team_id = g.visiting_team_id
+                JOIN team t_away ON t_away.team_id = g.away_team_id
                 JOIN team t_home ON t_home.team_id = g.home_team_id
                 """
             )

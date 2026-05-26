@@ -44,8 +44,8 @@ def ingest_historical_games() -> int:
             home_team_id=raw.get('homeTeamId'),
             period=raw.get('period'),
             season=raw.get('season'),
-            visiting_score=raw.get('visitingScore'),
-            visiting_team_id=raw.get('visitingTeamId'),
+            away_score=raw.get('visitingScore'),
+            away_team_id=raw.get('visitingTeamId'),
         )
         db.session.merge(record)
     db.session.commit()
@@ -74,8 +74,8 @@ def _fields_changed(existing: Game, raw: dict) -> bool:
         or existing.home_team_id != raw.get('homeTeamId')
         or existing.period != raw.get('period')
         or existing.season != raw.get('season')
-        or existing.visiting_score != raw.get('visitingScore')
-        or existing.visiting_team_id != raw.get('visitingTeamId')
+        or existing.away_score != raw.get('visitingScore')
+        or existing.away_team_id != raw.get('visitingTeamId')
     )
 
 
@@ -125,8 +125,8 @@ def refresh_recent_historical_games() -> int:
                 home_team_id=raw.get('homeTeamId'),
                 period=raw.get('period'),
                 season=raw.get('season'),
-                visiting_score=raw.get('visitingScore'),
-                visiting_team_id=raw.get('visitingTeamId'),
+                away_score=raw.get('visitingScore'),
+                away_team_id=raw.get('visitingTeamId'),
             )
             db.session.merge(record)
         updated += 1

@@ -345,7 +345,7 @@ def test_section3_code_does_not_reference_away_code():
     source = "".join(code_cell.get("source", []))
     assert "away_code" not in source, (
         "Section 3 still references away_code — game table has no such column; "
-        "use visiting_team_id instead (Issue #142)"
+        "use away_team_id instead (Issue #142)"
     )
 
 
@@ -530,13 +530,13 @@ def _get_section2b_code_source(nb: dict) -> str:
     return ""
 
 
-def test_section2b_join_uses_visiting_team_id():
-    """Section 2b JOIN must reference visiting_team_id, not away_code (Issue #141)."""
+def test_section2b_join_uses_away_team_id():
+    """Section 2b JOIN must reference away_team_id after Issue #144 standardization."""
     nb = _load_notebook()
     src = _get_section2b_code_source(nb)
     assert src, "Section 2b code cell not found"
-    assert "visiting_team_id" in src, (
-        "Section 2b JOIN must use g.visiting_team_id (Issue #141)"
+    assert "away_team_id" in src, (
+        "Section 2b JOIN must use g.away_team_id (Issue #144)"
     )
 
 

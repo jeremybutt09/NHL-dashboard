@@ -22,8 +22,22 @@ class TestModelTablenames:
         col_names = {col.name for col in Game.__table__.columns}
         assert 'season' in col_names
         assert 'eastern_start_time' in col_names
-        assert 'visiting_team_id' in col_names
+        assert 'away_team_id' in col_names
         assert 'home_team_id' in col_names
+
+    def test_game_has_away_columns(self):
+        """Game must expose away_team_id and away_score columns (Issue #144)."""
+        from models import Game
+        col_names = {col.name for col in Game.__table__.columns}
+        assert 'away_team_id' in col_names
+        assert 'away_score' in col_names
+
+    def test_game_lacks_visiting_columns(self):
+        """Game must not have visiting_team_id or visiting_score columns (Issue #144)."""
+        from models import Game
+        col_names = {col.name for col in Game.__table__.columns}
+        assert 'visiting_team_id' not in col_names
+        assert 'visiting_score' not in col_names
 
     def test_game_does_not_have_live_score_columns(self):
         """Game must NOT have the live-score columns from the legacy game table."""
@@ -128,8 +142,8 @@ class TestGameModelRoundtrip:
             game_type=2,
             home_score=3,
             home_team_id=10,
-            visiting_score=2,
-            visiting_team_id=15,
+            away_score=2,
+            away_team_id=15,
         )
         db.session.add(row)
         db.session.commit()

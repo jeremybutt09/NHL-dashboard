@@ -98,8 +98,8 @@ class TestGameModel:
             home_team_id=10,
             period=3,
             season=20252026,
-            visiting_score=2,
-            visiting_team_id=15,
+            away_score=2,
+            away_team_id=15,
         )
         db.session.add(row)
         db.session.commit()
@@ -117,8 +117,8 @@ class TestGameModel:
         assert retrieved.home_team_id == 10
         assert retrieved.period == 3
         assert retrieved.season == 20252026
-        assert retrieved.visiting_score == 2
-        assert retrieved.visiting_team_id == 15
+        assert retrieved.away_score == 2
+        assert retrieved.away_team_id == 15
 
     def test_nhl_historical_game_game_id_is_integer_pk(self, db):
         """game_id is the integer primary key (not auto-generated)."""
@@ -197,8 +197,8 @@ class TestIngestHistoricalGames:
         assert row.home_team_id == 10
         assert row.period == 3
         assert row.season == 20252026
-        assert row.visiting_score == 2
-        assert row.visiting_team_id == 15
+        assert row.away_score == 2
+        assert row.away_team_id == 15
 
     def test_ingest_historical_games_idempotent(self, db):
         """Running ingest_historical_games() twice results in no duplicate rows."""

@@ -110,8 +110,8 @@ class Game(db.Model):
     home_team_id           = db.Column(db.Integer)                          # API: homeTeamId
     period                 = db.Column(db.Integer)                          # API: period
     season                 = db.Column(db.Integer, index=True)              # API: season
-    visiting_score         = db.Column(db.Integer)                          # API: visitingScore
-    visiting_team_id       = db.Column(db.Integer)                          # API: visitingTeamId
+    away_score             = db.Column(db.Integer)                          # API: visitingScore
+    away_team_id           = db.Column(db.Integer)                          # API: visitingTeamId
 
     def __repr__(self):
         return f'<Game {self.game_id} season={self.season}>'
