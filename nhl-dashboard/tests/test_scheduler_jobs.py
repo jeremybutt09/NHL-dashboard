@@ -446,25 +446,28 @@ class TestPollScores:
         assert game.away_score == 4
         assert game.home_score == 2
 
-    def test_refresh_scores_skips_missing_game_id(self, db, team_factory):
-        """refresh_scores() skips a game_id from the API that is not in the DB."""
+    def test_refresh_scores_upserts_missing_game_id(self, db, team_factory):
+        """refresh_scores() creates a new game row for a game_id not already in the DB."""
         self._make_teams(team_factory)
-        # Only game 201 is in DB; API also returns 999 which is absent
         game = self._make_game(db, 2026030201)
 
         api_data = _make_score_now_data(
             _score_game(2026030201, state="LIVE"),
-            _score_game(9999999999, state="LIVE"),  # not in DB
+            _score_game(9999999999, state="LIVE"),  # not in DB — should be inserted
         )
-        with patch("nhl_client.get_score_now", return_value=api_data):
+        with patch("nhl_client.get_score_now", return_value=api_data), \
+             patch("nhl_client.get_all_teams", return_value=[]):
             from services.scores import refresh_scores
             refresh_scores()  # must not raise
 
         db.session.refresh(game)
         assert game.status == "live"
+        # New game row must be present
+        new_game = db.session.get(Game, 9999999999)
+        assert new_game is not None
 
-    def test_refresh_scores_logs_warning_for_missing_game_id(self, db, team_factory, caplog):
-        """refresh_scores() logs a warning when a game_id from the API is not in the DB."""
+    def test_refresh_scores_logs_info_for_new_game_id(self, db, team_factory, caplog):
+        """refresh_scores() logs an INFO message when a new game row is created."""
         self._make_teams(team_factory)
         self._make_game(db, 2026030201)
 
@@ -472,14 +475,14 @@ class TestPollScores:
             _score_game(2026030201, state="LIVE"),
             _score_game(9999999999, state="LIVE"),
         )
-        with patch("nhl_client.get_score_now", return_value=api_data):
-            with caplog.at_level(logging.WARNING):
+        with patch("nhl_client.get_score_now", return_value=api_data), \
+             patch("nhl_client.get_all_teams", return_value=[]):
+            with caplog.at_level(logging.INFO, logger="services.scores"):
                 from services.scores import refresh_scores
                 refresh_scores()
 
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("9999999999" in m for m in warning_messages)
-        assert any("skipping" in m for m in warning_messages)
+        info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+        assert any("9999999999" in m for m in info_messages)
 
     def test_refresh_scores_api_failure_logs_error(self, db, team_factory, caplog):
         """refresh_scores() logs an error when get_score_now raises."""
