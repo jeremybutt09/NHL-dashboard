@@ -18,7 +18,8 @@ def games_today():
     try:
         partner_id_raw = request.args.get('partner_id')
         partner_id = int(partner_id_raw) if partner_id_raw else None
-        return jsonify(build_today_response(partner_id=partner_id))
+        date = request.args.get('date')  # optional YYYY-MM-DD
+        return jsonify(build_today_response(partner_id=partner_id, date=date))
     except Exception as exc:
         current_app.logger.exception("Unhandled error in /api/games/today")
         return jsonify({

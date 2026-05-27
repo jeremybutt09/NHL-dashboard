@@ -66,9 +66,22 @@ export default function App() {
   const fetchGames = useCallback(async () => {
     if (document.visibilityState === 'hidden') return
     try {
-      const url = partnerId != null
-        ? `/api/games/today?partner_id=${partnerId}`
-        : '/api/games/today'
+      // Resolve the day nav state to a YYYY-MM-DD string for the backend filter
+      let targetDate = null
+      if (day === 'today') {
+        targetDate = null  // let the backend use its own today_et()
+      } else if (day === 'tomorrow') {
+        targetDate = addDays(todayKey(), 1)
+      } else {
+        targetDate = day  // already a YYYY-MM-DD key from the calendar picker
+      }
+
+      const params = new URLSearchParams()
+      if (partnerId != null) params.set('partner_id', String(partnerId))
+      if (targetDate != null) params.set('date', targetDate)
+      const qs = params.toString()
+      const url = qs ? `/api/games/today?${qs}` : '/api/games/today'
+
       const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
@@ -80,7 +93,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [partnerId])
+  }, [partnerId, day])
 
   useEffect(() => {
     fetchGames()
@@ -96,13 +109,12 @@ export default function App() {
   // ── Derived state ─────────────────────────────────────────────────────────
   const allGames = data?.games ?? []
 
-  // For "today/tomorrow" routing: filter by date if day !== 'today'
-  // (the backend always returns today's games, so day nav is mostly UI-only for now)
   const games = allGames
 
   // Game counts per day key (for the nav badges)
   const todayK = todayKey()
-  const gameCounts = { [todayK]: games.length }
+  const resolvedKey = day === 'today' ? todayK : day === 'tomorrow' ? addDays(todayK, 1) : (day || todayK)
+  const gameCounts = { [resolvedKey]: games.length }
   const liveCount  = games.filter(g => g.status === 'live').length
 
   // ── Error toast ───────────────────────────────────────────────────────────

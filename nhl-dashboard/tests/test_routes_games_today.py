@@ -298,3 +298,58 @@ class TestGamesTodayScheduledScores:
         game = client.get('/api/games/today').get_json()['games'][0]
         assert game['status'] == 'scheduled'
         assert game['live'] is None
+
+
+class TestGamesTodayDateParam:
+    """Scenario: ?date=YYYY-MM-DD returns games for the specified date (Issue #152)."""
+
+    @pytest.fixture(autouse=True)
+    def seed_db(self, team_factory, game_factory):
+        """Seed DB with games on two different dates."""
+        team_factory('TOR', 'Toronto Maple Leafs')
+        team_factory('BOS', 'Boston Bruins')
+        team_factory('EDM', 'Edmonton Oilers')
+        team_factory('VAN', 'Vancouver Canucks')
+
+        self.past_game = game_factory(
+            'TOR', 'BOS',
+            status='final', away_score=3, home_score=2,
+            game_date='2026-01-15',
+        )
+        self.today_game = game_factory(
+            'EDM', 'VAN',
+            status='scheduled', away_score=0, home_score=0,
+        )
+
+    def test_games_today_date_param_returns_game_for_specified_date(self, client):
+        """?date=<past-date> returns games tagged with that date."""
+        data = client.get('/api/games/today?date=2026-01-15').get_json()
+        game_ids = [g['game_id'] for g in data['games']]
+        assert self.past_game.game_id in game_ids
+
+    def test_games_today_date_param_excludes_other_dates(self, client):
+        """?date=<past-date> excludes games from other dates."""
+        data = client.get('/api/games/today?date=2026-01-15').get_json()
+        game_ids = [g['game_id'] for g in data['games']]
+        assert self.today_game.game_id not in game_ids
+
+    def test_games_today_no_date_param_excludes_past_games(self, client):
+        """Without ?date=, games from past dates are still excluded."""
+        data = client.get('/api/games/today').get_json()
+        game_ids = [g['game_id'] for g in data['games']]
+        assert self.past_game.game_id not in game_ids
+
+    def test_games_today_no_date_param_returns_today_games(self, client):
+        """Without ?date=, today's games are still returned (backward compat)."""
+        data = client.get('/api/games/today').get_json()
+        game_ids = [g['game_id'] for g in data['games']]
+        assert self.today_game.game_id in game_ids
+
+    def test_games_today_date_param_returns_200(self, client):
+        """?date= with a valid date string responds 200."""
+        assert client.get('/api/games/today?date=2026-01-15').status_code == 200
+
+    def test_games_today_date_param_empty_for_unmatched_date(self, client):
+        """?date= with a date that has no games returns an empty list."""
+        data = client.get('/api/games/today?date=2000-01-01').get_json()
+        assert data['games'] == []

@@ -359,7 +359,7 @@ def prune_old_snapshots():
     print(f'[slate] Pruned {result.rowcount} old snapshots')
 
 
-def build_today_response(partner_id: int | None = None) -> dict:
+def build_today_response(partner_id: int | None = None, date: str | None = None) -> dict:
     """Return the JSON shape for GET /api/games/today.
 
     Args:
@@ -368,15 +368,17 @@ def build_today_response(partner_id: int | None = None) -> dict:
             NhlOddsLine row for that (game, partner) pair instead of the
             OddsSnapshot consensus.  When None, the legacy OddsSnapshot path
             is used unchanged.
+        date: Optional YYYY-MM-DD string.  When provided, filters games by
+            this date instead of today's Eastern Time date.
     """
     from sqlalchemy import select
 
     now = datetime.now(timezone.utc)
-    et_today = today_et()
+    target_date = date if date is not None else today_et()
 
     today_games = db.session.scalars(
         select(LiveGame)
-        .where(LiveGame.game_date == et_today)
+        .where(LiveGame.game_date == target_date)
         .order_by(LiveGame.start_est)
     ).all()
 
