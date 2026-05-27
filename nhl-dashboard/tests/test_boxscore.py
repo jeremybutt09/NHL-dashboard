@@ -589,3 +589,84 @@ class TestBackfillBoxscoresCommand:
         assert result.exit_code == 0
         assert db.session.get(Boxscore, 2001) is not None
         assert db.session.get(Boxscore, 2002) is None
+
+
+# ── multi-season sequential backfill (Issue #149) ────────────────────────────
+
+class TestBackfillBoxscoresMultiSeason:
+    """Tests for sequential multi-season backfill covering 20202021–20232024 (Issue #149)."""
+
+    def test_backfill_boxscores_historical_season_id_stored(self, db):
+        """backfill_boxscores stores season_id from the API response for a historical season."""
+        db.session.add(Game(game_id=2021010001, game_date="2021-01-13", season=20202021))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id, season=20202021, gameDate="2021-01-13")
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(season=20202021)
+
+        assert count == 1
+        row = db.session.get(Boxscore, 2021010001)
+        assert row is not None
+        assert row.season_id == 20202021
+
+    def test_backfill_boxscores_sequential_seasons_no_interference(self, db):
+        """Running backfill_boxscores for four seasons in sequence produces rows for all."""
+        season_games = [
+            (6001, 20202021, "2021-01-14"),
+            (6002, 20212022, "2021-10-14"),
+            (6003, 20222023, "2022-10-14"),
+            (6004, 20232024, "2023-10-14"),
+        ]
+        for game_id, season, game_date in season_games:
+            db.session.add(Game(game_id=game_id, game_date=game_date, season=season))
+        db.session.commit()
+
+        season_map = {gid: s for gid, s, _ in season_games}
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id, season=season_map[game_id])
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            counts = [backfill_boxscores(season=s) for _, s, _ in season_games]
+
+        assert counts == [1, 1, 1, 1]
+        for game_id, season, _ in season_games:
+            row = db.session.get(Boxscore, game_id)
+            assert row is not None
+            assert row.season_id == season
+
+    def test_backfill_boxscores_command_four_seasons_sequential(self, app, db):
+        """flask backfill-boxscores --season for four historical seasons exits cleanly."""
+        season_games = [
+            (7001, 20202021, "2021-01-14"),
+            (7002, 20212022, "2021-10-14"),
+            (7003, 20222023, "2022-10-14"),
+            (7004, 20232024, "2023-10-14"),
+        ]
+        for game_id, season, game_date in season_games:
+            db.session.add(Game(game_id=game_id, game_date=game_date, season=season))
+        db.session.commit()
+
+        season_map = {gid: s for gid, s, _ in season_games}
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id, season=season_map[game_id])
+
+        runner = app.test_cli_runner()
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            for _, season, _ in season_games:
+                result = runner.invoke(args=["backfill-boxscores", "--season", str(season)])
+                assert result.exit_code == 0, f"Season {season} exited with {result.exit_code}: {result.output}"
+
+        for game_id, season, _ in season_games:
+            row = db.session.get(Boxscore, game_id)
+            assert row is not None
+            assert row.season_id == season
