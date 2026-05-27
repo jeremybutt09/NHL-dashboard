@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from 'react'
+
 // FilterBar — "Tonight's slate" heading + market tabs + sort button + odds selector
 const MARKETS = [
   { id: 'h2h',     label: 'Moneyline' },
@@ -29,41 +31,104 @@ function SegmentButton({ label, value }) {
 function OddsPartnerSelector({ partners, partnerId, onChange }) {
   if (!partners || partners.length === 0) return null
   const current = partners.find(p => p.partner_id === partnerId) || partners[0]
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
 
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <span style={{
-        position: 'absolute', left: 10, pointerEvents: 'none',
-        fontSize: 10, color: 'var(--faint)', letterSpacing: '0.08em', textTransform: 'uppercase',
-      }}>
-        Odds
-      </span>
-      <select
-        value={partnerId ?? ''}
-        onChange={e => onChange(Number(e.target.value))}
+    <div ref={containerRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      {/* Trigger pill */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--rule-strong)' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--rule)' }}
         style={{
-          paddingLeft: 44, paddingRight: 28, paddingTop: 6, paddingBottom: 6,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 10px',
           background: 'var(--paper)',
           border: '1px solid var(--rule)',
           borderRadius: 8,
           fontSize: 12, fontWeight: 600, color: 'var(--ink)',
           cursor: 'pointer',
           boxShadow: 'var(--shadow)',
-          appearance: 'none',
-          WebkitAppearance: 'none',
+          fontFamily: 'inherit',
         }}
       >
-        {partners.map(p => (
-          <option key={p.partner_id} value={p.partner_id}>{p.name}</option>
-        ))}
-      </select>
-      <svg
-        width="10" height="10" viewBox="0 0 10 10" fill="none"
-        stroke="currentColor" strokeWidth="1.6"
-        style={{ position: 'absolute', right: 10, pointerEvents: 'none', color: 'var(--faint)' }}
-      >
-        <path d="M2.5 4l2.5 2.5L7.5 4"/>
-      </svg>
+        <span style={{ fontSize: 10, color: 'var(--faint)', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 2 }}>
+          Odds
+        </span>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: current.bg_color, flexShrink: 0 }} />
+        <span>{current.name}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6"
+             style={{ color: 'var(--faint)', marginLeft: 2 }}>
+          <path d="M2.5 4l2.5 2.5L7.5 4"/>
+        </svg>
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          minWidth: 180,
+          background: 'var(--paper)',
+          border: '1px solid var(--rule)',
+          borderRadius: 10,
+          boxShadow: 'var(--shadow-lg)',
+          zIndex: 50,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '8px 12px 6px',
+            fontSize: 10, fontWeight: 700, color: 'var(--faint)',
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+          }}>
+            ODDS SOURCE
+          </div>
+          <div style={{ borderTop: '1px solid var(--rule)', marginBottom: 4 }} />
+          {partners.map(p => {
+            const active = p.partner_id === (partnerId ?? partners[0].partner_id)
+            return (
+              <div
+                key={p.partner_id}
+                role="option"
+                aria-selected={active}
+                onClick={() => { onChange(p.partner_id); setOpen(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 12px',
+                  fontSize: 12, fontWeight: active ? 600 : 400,
+                  color: 'var(--ink)',
+                  background: active ? 'color-mix(in oklab, var(--accent) 8%, transparent)' : 'transparent',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'color-mix(in oklab, var(--accent) 8%, transparent)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: p.bg_color, flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{p.name}</span>
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                       style={{ color: 'var(--accent)' }}>
+                    <path d="M2 6l3 3 5-5"/>
+                  </svg>
+                )}
+              </div>
+            )
+          })}
+          <div style={{ height: 4 }} />
+        </div>
+      )}
     </div>
   )
 }
