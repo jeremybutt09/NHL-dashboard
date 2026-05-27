@@ -473,7 +473,7 @@ def _build_from_db(games: list, now: datetime, partner_id: int | None = None) ->
         edge_val = calc_edge(fair_a, imp_a) if snap else None
 
         live_block = None
-        if g.status == 'live':
+        if g.status in ('live', 'final'):
             live_block = {
                 'period':     g.period or '1st',
                 'clock':      g.clock or '20:00',

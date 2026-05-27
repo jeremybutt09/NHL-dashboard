@@ -246,3 +246,55 @@ class TestGamesTodayEtDateFilter:
             data = client.get('/api/games/today').get_json()
 
         assert 9003 in [g['game_id'] for g in data['games']]
+
+
+class TestGamesTodayFinalScores:
+    """Scenario: final game shows actual scores in the live block (Issue #151)."""
+
+    @pytest.fixture(autouse=True)
+    def seed_db(self, team_factory, game_factory):
+        """Seed DB with one final game that has real scores."""
+        team_factory('CAR', 'Carolina Hurricanes')
+        team_factory('MTL', 'Montreal Canadiens')
+        self.game = game_factory(
+            'CAR', 'MTL',
+            status='final', away_score=3, home_score=2,
+            period='3rd', clock='00:00',
+        )
+
+    def test_games_today_live_block_present_for_final_game(self, client):
+        """A final game must have a non-null live block so the frontend can render scores."""
+        game = client.get('/api/games/today').get_json()['games'][0]
+        assert game['status'] == 'final'
+        assert game['live'] is not None
+
+    def test_games_today_final_game_shows_correct_away_score(self, client):
+        """away_score in the live block must reflect the actual final score."""
+        live = client.get('/api/games/today').get_json()['games'][0]['live']
+        assert live['away_score'] == 3
+
+    def test_games_today_final_game_shows_correct_home_score(self, client):
+        """home_score in the live block must reflect the actual final score."""
+        live = client.get('/api/games/today').get_json()['games'][0]['live']
+        assert live['home_score'] == 2
+
+
+class TestGamesTodayScheduledScores:
+    """Scenario: scheduled game shows no scores (live block is null) (Issue #151)."""
+
+    @pytest.fixture(autouse=True)
+    def seed_db(self, team_factory, game_factory):
+        """Seed DB with one scheduled game that has no score data yet."""
+        team_factory('TOR', 'Toronto Maple Leafs')
+        team_factory('BOS', 'Boston Bruins')
+        self.game = game_factory(
+            'TOR', 'BOS',
+            status='scheduled', away_score=0, home_score=0,
+            period=None, clock=None,
+        )
+
+    def test_games_today_scheduled_game_live_block_is_null(self, client):
+        """A scheduled game with no score data must return live: null."""
+        game = client.get('/api/games/today').get_json()['games'][0]
+        assert game['status'] == 'scheduled'
+        assert game['live'] is None
