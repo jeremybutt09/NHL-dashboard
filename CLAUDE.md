@@ -59,6 +59,18 @@ To start from a specific issue number (e.g., after a failure at #7):
 
 Each run opens a fresh Claude session per issue, commits, and closes the issue on GitHub before moving on. See `scripts/issue-prompt.md` for the per-session instructions Claude receives.
 
+## Database schema changes
+
+Any time the database structure changes — column renamed, table added or removed, column added or dropped — you **must** update all five of the following before committing:
+
+1. **`docs/database-schema.md`** — reflect the new/renamed/removed table or column in every relevant table definition.
+2. **`docs/api-field-mappings.md`** — update the mapping between the source API field and the database column name wherever the change applies.
+3. **`docs/api-response-examples.md`** — update any example JSON snippets or field lists that reference the old name or shape.
+4. **`docs/data-pipeline.md`** — update the pipeline description (ingestion steps, transform logic, field names) to match the new structure.
+5. **`nhl-dashboard/notebooks/db_explorer.ipynb`** — update any cells that reference the old column/table names so the notebook runs cleanly against the new schema. For a new table, add a cell that queries it and briefly describes what it contains, what API endpoint populates it, and where in the pipeline that happens.
+
+These updates are **part of the same commit as the schema change** — they are not follow-up work. Do not close the issue or mark the task done until all five documents are consistent with the new schema.
+
 ## AI session state
 
 The `memory/` directory is intentionally gitignored. It contains auto-generated context files written by Claude during agent runs and is not source code. Do not commit or force-track files under `memory/`.
