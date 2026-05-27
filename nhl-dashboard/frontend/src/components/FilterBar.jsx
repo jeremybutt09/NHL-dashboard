@@ -69,13 +69,14 @@ function OddsPartnerSelector({ partners, partnerId, onChange }) {
 }
 
 export function FilterBar({ numGames, totalGames, liveCount, market, onMarketChange, day, partners, partnerId, onPartnerChange }) {
-  const todayKey = () => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  }
+  // en-CA locale produces YYYY-MM-DD matching game_date keys; timeZone keeps this in ET.
+  const todayKey = () =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const tomorrowKey = () => {
-    const d = new Date(); d.setDate(d.getDate() + 1)
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const d = new Date(etToday + 'T12:00:00')
+    d.setDate(d.getDate() + 1)
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   }
   const formatDateLabel = (key) => {
     const d = new Date(key + 'T12:00:00')

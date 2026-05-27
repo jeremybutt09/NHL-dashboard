@@ -5,14 +5,14 @@ import { StatStrip }  from './components/StatStrip.jsx'
 import { SlateTable } from './components/SlateTable.jsx'
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
+// en-CA locale produces YYYY-MM-DD, which is what game_date keys use.
 function todayKey() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
 function addDays(key, n) {
   const d = new Date(key + 'T12:00:00')
   d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
 
 export default function App() {

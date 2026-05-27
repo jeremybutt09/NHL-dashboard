@@ -171,3 +171,78 @@ class TestGamesTodayMissingOdds:
     def test_games_today_missing_odds_sparkline_is_empty(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
         assert game['movement_24h'] == []
+
+
+class TestGamesTodayEtDateFilter:
+    """Verify /api/games/today filters by Eastern Time calendar date (Issue #150)."""
+
+    def test_games_today_excludes_game_with_past_game_date(self, client, db, team_factory):
+        """A LiveGame with a past game_date is excluded from today's response."""
+        from datetime import datetime
+        from models import LiveGame
+
+        team_factory('TOR', 'Toronto Maple Leafs')
+        team_factory('BOS', 'Boston Bruins')
+
+        game = LiveGame(
+            game_id=9001,
+            away_code='TOR', home_code='BOS',
+            game_date='2020-01-01',
+            start_est=datetime(2020, 1, 1, 19, 0),
+            status='scheduled',
+        )
+        db.session.add(game)
+        db.session.commit()
+
+        data = client.get('/api/games/today').get_json()
+        assert 9001 not in [g['game_id'] for g in data['games']]
+
+    def test_games_today_et_boundary_excludes_utc_next_day_game(self, client, db, team_factory):
+        """A game dated ET-tomorrow is excluded when today_et() is mocked to return ET-today."""
+        from datetime import datetime
+        from models import LiveGame
+        from unittest.mock import patch
+
+        team_factory('TOR', 'Toronto Maple Leafs')
+        team_factory('BOS', 'Boston Bruins')
+
+        game = LiveGame(
+            game_id=9002,
+            away_code='TOR', home_code='BOS',
+            game_date='2026-05-27',
+            start_est=datetime(2026, 5, 27, 0, 30),
+            status='scheduled',
+        )
+        db.session.add(game)
+        db.session.commit()
+
+        # Simulate: ET clock still shows May 26, UTC already shows May 27
+        with patch("services.slate.today_et", return_value="2026-05-26"):
+            data = client.get('/api/games/today').get_json()
+
+        assert 9002 not in [g['game_id'] for g in data['games']]
+
+    def test_games_today_et_boundary_includes_et_today_game(self, client, db, team_factory):
+        """A game dated ET-today is included even when it's already past midnight UTC."""
+        from datetime import datetime
+        from models import LiveGame
+        from unittest.mock import patch
+
+        team_factory('TOR', 'Toronto Maple Leafs')
+        team_factory('BOS', 'Boston Bruins')
+
+        game = LiveGame(
+            game_id=9003,
+            away_code='TOR', home_code='BOS',
+            game_date='2026-05-26',
+            start_est=datetime(2026, 5, 26, 19, 0),
+            status='scheduled',
+        )
+        db.session.add(game)
+        db.session.commit()
+
+        # Simulate: ET clock shows May 26 (23:30 ET), UTC shows May 27 (03:30 UTC)
+        with patch("services.slate.today_et", return_value="2026-05-26"):
+            data = client.get('/api/games/today').get_json()
+
+        assert 9003 in [g['game_id'] for g in data['games']]

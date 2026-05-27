@@ -15,6 +15,16 @@ def now_et() -> datetime:
     return datetime.now(_EASTERN).replace(tzinfo=None)
 
 
+def today_et() -> str:
+    """Return today's calendar date in Eastern Time as a YYYY-MM-DD string.
+
+    Uses now_et() so that the ET date is consistent with all freshness
+    timestamps and correctly handles the UTC midnight boundary (e.g.
+    23:30 ET on May 26 = 03:30 UTC on May 27 → returns '2026-05-26').
+    """
+    return now_et().strftime('%Y-%m-%d')
+
+
 def migrate_timestamps_to_et() -> dict:
     """Convert existing UTC-naive freshness timestamps to Eastern Time (one-time migration).
 

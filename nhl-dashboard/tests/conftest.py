@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from app import create_app  # noqa: E402
 from extensions import db as _db  # noqa: E402
 from models import Team, LiveGame, OddsSnapshot, ModelFair, NhlOddsPartner, NhlOddsLine  # noqa: E402
+from services.time_utils import today_et  # noqa: E402
 
 
 @pytest.fixture()
@@ -90,6 +91,7 @@ def game_factory(db):
         home_score=1,
         period="2",
         clock="10:00",
+        game_date=None,
     ):
         game = LiveGame(
             away_code=away_code,
@@ -99,6 +101,7 @@ def game_factory(db):
             home_score=home_score,
             period=period,
             clock=clock,
+            game_date=game_date if game_date is not None else today_et(),
             start_est=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )

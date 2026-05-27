@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from services.time_utils import now_et
+from services.time_utils import now_et, today_et
 
 _EASTERN = ZoneInfo("America/New_York")
 
@@ -110,7 +110,7 @@ def refresh_schedule():
     if not game_weeks:
         return
 
-    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    today_str = today_et()
     today_block = next((w for w in game_weeks if w.get('date') == today_str), None)
     if not today_block:
         today_block = game_weeks[0] if game_weeks else None
@@ -212,7 +212,7 @@ def refresh_slate():
     if not game_weeks:
         return
 
-    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    today_str = today_et()
     # Find today's block; fall back to first block
     today_block = next((w for w in game_weeks if w.get('date') == today_str), None)
     if not today_block:
@@ -372,9 +372,12 @@ def build_today_response(partner_id: int | None = None) -> dict:
     from sqlalchemy import select
 
     now = datetime.now(timezone.utc)
+    et_today = today_et()
 
     today_games = db.session.scalars(
-        select(LiveGame).order_by(LiveGame.start_est)
+        select(LiveGame)
+        .where(LiveGame.game_date == et_today)
+        .order_by(LiveGame.start_est)
     ).all()
 
     return _build_from_db(today_games, now, partner_id=partner_id)

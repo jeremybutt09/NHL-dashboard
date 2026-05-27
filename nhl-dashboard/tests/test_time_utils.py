@@ -1,11 +1,13 @@
-"""Tests for time_utils: now_et() helper and migrate_timestamps_to_et() (Issue #136).
+"""Tests for time_utils: now_et(), today_et(), and migrate_timestamps_to_et() (Issues #136, #150).
 
 Acceptance criteria:
   - now_et() returns a tz-naive datetime representing Eastern Time.
+  - today_et() returns the current calendar date in ET as a YYYY-MM-DD string.
   - All freshness timestamp columns (fetched_at, updated_at, computed_at) are written
     as ET tz-naive values at the service write layer.
   - migrate_timestamps_to_et() shifts existing UTC-naive rows to ET equivalents.
 """
+import re
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -276,3 +278,35 @@ class TestServiceWritesEasternTime:
         row = db.session.get(LiveGame, 2026030001)
         assert row is not None
         assert row.updated_at == fixed_et
+
+
+# ── today_et() ────────────────────────────────────────────────────────────────
+
+class TestTodayEt:
+    def test_today_et_returns_string(self):
+        """today_et() returns a string value."""
+        from services.time_utils import today_et
+        assert isinstance(today_et(), str)
+
+    def test_today_et_returns_iso_date_format(self):
+        """today_et() returns a YYYY-MM-DD formatted string."""
+        from services.time_utils import today_et
+        assert re.match(r'^\d{4}-\d{2}-\d{2}$', today_et())
+
+    def test_today_et_returns_et_calendar_date_not_utc_at_midnight_boundary(self):
+        """today_et() returns the ET date even when UTC has rolled to the next day.
+
+        23:30 ET on 2026-05-26 = 03:30 UTC on 2026-05-27.  today_et() must
+        return '2026-05-26', not '2026-05-27'.
+        """
+        from services.time_utils import today_et
+        fake_et_now = datetime(2026, 5, 26, 23, 30, 0)  # tz-naive ET: still May 26
+        with patch("services.time_utils.now_et", return_value=fake_et_now):
+            result = today_et()
+        assert result == "2026-05-26"
+
+    def test_today_et_matches_now_et_date(self):
+        """today_et() returns the date portion of now_et()."""
+        from services.time_utils import today_et, now_et
+        expected = now_et().strftime('%Y-%m-%d')
+        assert today_et() == expected

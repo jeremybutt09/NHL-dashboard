@@ -282,6 +282,36 @@ class TestRefreshDashboardGames:
 
         assert count == 0
 
+    def test_refresh_dashboard_games_uses_et_date_at_utc_midnight_boundary(self, db):
+        """refresh_dashboard_games() picks up ET-today boxscores when UTC is already next day.
+
+        Simulates 23:30 ET on 2026-05-26 (= 03:30 UTC on 2026-05-27): today_et() must
+        return '2026-05-26' so the May-26 boxscore is included.
+        """
+        from unittest.mock import patch
+        from services.dashboard_game import refresh_dashboard_games
+
+        _make_boxscore(db, game_id=9901, game_date="2026-05-26")
+
+        with patch("services.dashboard_game.today_et", return_value="2026-05-26"):
+            count = refresh_dashboard_games()
+
+        assert count == 1
+        assert db.session.get(DashboardGame, 9901) is not None
+
+    def test_refresh_dashboard_games_excludes_et_tomorrow_at_utc_midnight_boundary(self, db):
+        """refresh_dashboard_games() excludes ET-tomorrow boxscores at the UTC midnight boundary."""
+        from unittest.mock import patch
+        from services.dashboard_game import refresh_dashboard_games
+
+        _make_boxscore(db, game_id=9902, game_date="2026-05-27")
+
+        with patch("services.dashboard_game.today_et", return_value="2026-05-26"):
+            count = refresh_dashboard_games()
+
+        assert count == 0
+        assert db.session.get(DashboardGame, 9902) is None
+
     def test_refresh_dashboard_games_multiple_games(self, db):
         """refresh_dashboard_games() processes all of today's boxscore rows."""
         _make_boxscore(db, game_id=_GAME_ID)

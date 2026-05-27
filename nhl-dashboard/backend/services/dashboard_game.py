@@ -7,11 +7,11 @@ Refresh cadence: same as POLL_BOXSCORE_INTERVAL (default 60 s) via
 APScheduler, invoked after refresh_boxscores() so live data is always current.
 """
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from extensions import db
 from models import Boxscore, DashboardGame
-from services.time_utils import now_et
+from services.time_utils import now_et, today_et
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def refresh_dashboard_games() -> int:
     Returns:
         Number of dashboard_game rows successfully upserted.
     """
-    today = date.today().isoformat()
+    today = today_et()
     boxscores = db.session.scalars(
         db.select(Boxscore).where(Boxscore.game_date == today)
     ).all()
