@@ -12,12 +12,10 @@ class TestGameFactoryDefaultStatus:
         assert game.status == "live"
 
     def test_game_factory_default_status_populates_live_block(
-        self, client, team_factory, game_factory
+        self, client, boxscore_factory
     ):
-        """A game created with the default status must have a non-null live block."""
-        team_factory("TOR", "Toronto Maple Leafs")
-        team_factory("BOS", "Boston Bruins")
-        game_factory("BOS", "TOR")
+        """A LIVE boxscore game must produce a non-null live block in the API response."""
+        boxscore_factory("BOS", "TOR", game_state="LIVE")
         data = client.get("/api/games/today").get_json()
         game = data["games"][0]
         assert game["live"] is not None

@@ -9,12 +9,15 @@ import pytest
 # Unused — kept for potential future use if team_id becomes NOT NULL.
 _team_id_seq = itertools.count(1)
 
+# Auto-incrementing game IDs for the boxscore_factory.
+_boxscore_id_seq = itertools.count(8001)
+
 # Make nhl-dashboard/backend importable without installing it as a package.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
 
 from app import create_app  # noqa: E402
 from extensions import db as _db  # noqa: E402
-from models import Team, LiveGame, OddsSnapshot, ModelFair, NhlOddsPartner, NhlOddsLine  # noqa: E402
+from models import Team, LiveGame, OddsSnapshot, ModelFair, NhlOddsPartner, NhlOddsLine, Boxscore  # noqa: E402
 from services.time_utils import today_et  # noqa: E402
 
 
@@ -164,5 +167,67 @@ def model_fair_factory(db):
         db.session.add(fair)
         db.session.commit()
         return fair
+
+    return make
+
+
+@pytest.fixture()
+def boxscore_factory(db):
+    """Factory that creates and commits a Boxscore row with sensible defaults.
+
+    Args:
+        away_abbrev: Three-letter away team abbreviation.
+        home_abbrev: Three-letter home team abbreviation.
+        away_name: Full away team name; defaults to away_abbrev.
+        home_name: Full home team name; defaults to home_abbrev.
+        game_state: NHL raw gameState string, defaults to ``"FUT"``.
+        away_score: Away team score, defaults to ``0``.
+        home_score: Home team score, defaults to ``0``.
+        away_sog: Away shots on goal, defaults to ``0``.
+        home_sog: Home shots on goal, defaults to ``0``.
+        period: Period string (e.g. ``"2nd"``), defaults to ``None``.
+        clock: Time remaining string, defaults to ``None``.
+        game_date: YYYY-MM-DD string; defaults to today's ET date.
+        game_id: Optional explicit integer PK; auto-assigned if omitted.
+
+    Returns:
+        The committed Boxscore instance.
+    """
+    def make(
+        away_abbrev,
+        home_abbrev,
+        away_name=None,
+        home_name=None,
+        game_state="FUT",
+        away_score=0,
+        home_score=0,
+        away_sog=0,
+        home_sog=0,
+        period=None,
+        clock=None,
+        game_date=None,
+        game_id=None,
+    ):
+        gid = game_id if game_id is not None else next(_boxscore_id_seq)
+        row = Boxscore(
+            game_id=gid,
+            away_abbrev=away_abbrev,
+            home_abbrev=home_abbrev,
+            away_name=away_name or away_abbrev,
+            home_name=home_name or home_abbrev,
+            game_state=game_state,
+            away_score=away_score,
+            home_score=home_score,
+            away_sog=away_sog,
+            home_sog=home_sog,
+            period=period,
+            clock=clock,
+            game_date=game_date if game_date is not None else today_et(),
+            start_time_est=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(row)
+        db.session.commit()
+        return row
 
     return make

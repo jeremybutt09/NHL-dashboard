@@ -10,7 +10,7 @@ from services.time_utils import now_et, today_et
 _EASTERN = ZoneInfo("America/New_York")
 
 from extensions import db
-from models import LiveGame, NhlOddsLine, OddsSnapshot, ModelFair
+from models import LiveGame, NhlOddsLine, OddsSnapshot, ModelFair, Boxscore
 from services.implied import american_to_implied, devig_two_way, edge as calc_edge
 
 logger = logging.getLogger(__name__)
@@ -360,14 +360,13 @@ def prune_old_snapshots():
 
 
 def build_today_response(partner_id: int | None = None, date: str | None = None) -> dict:
-    """Return the JSON shape for GET /api/games/today.
+    """Return the JSON shape for GET /api/games/today, reading from the boxscore table.
 
     Args:
         partner_id: Optional NhlOddsPartner.partner_id.  When provided, the
             ``ml`` field in each game row is sourced from the most recent
             NhlOddsLine row for that (game, partner) pair instead of the
-            OddsSnapshot consensus.  When None, the legacy OddsSnapshot path
-            is used unchanged.
+            OddsSnapshot consensus.  When None, the OddsSnapshot path is used.
         date: Optional YYYY-MM-DD string.  When provided, filters games by
             this date instead of today's Eastern Time date.
     """
@@ -376,13 +375,13 @@ def build_today_response(partner_id: int | None = None, date: str | None = None)
     now = datetime.now(timezone.utc)
     target_date = date if date is not None else today_et()
 
-    today_games = db.session.scalars(
-        select(LiveGame)
-        .where(LiveGame.game_date == target_date)
-        .order_by(LiveGame.start_est)
+    boxscores = db.session.scalars(
+        select(Boxscore)
+        .where(Boxscore.game_date == target_date)
+        .order_by(Boxscore.start_time_est)
     ).all()
 
-    return _build_from_db(today_games, now, partner_id=partner_id)
+    return _build_from_boxscores(boxscores, now, partner_id=partner_id)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -521,6 +520,103 @@ def _build_from_db(games: list, now: datetime, partner_id: int | None = None) ->
             'fair':   {'away': round(fair_a, 2),  'home': round(fair_h, 2)},
             'edge':   round(edge_val, 2) if edge_val is not None else None,
             'movement_24h': _get_sparkline(g.game_id),
+        }
+        result.append(row)
+
+    return {'updated_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'), 'games': result}
+
+
+_LIVE_STATES  = frozenset({'LIVE', 'CRIT'})
+_FINAL_STATES = frozenset({'FINAL', 'OFF'})
+
+
+def _build_from_boxscores(boxscores: list, now: datetime, partner_id: int | None = None) -> dict:
+    """Build the /api/games/today JSON payload from Boxscore rows.
+
+    Args:
+        boxscores: List of Boxscore ORM instances for the target date.
+        now: Current UTC datetime used for the updated_at envelope.
+        partner_id: When provided, ml odds are sourced from NhlOddsLine for
+            that partner rather than the OddsSnapshot consensus.
+
+    Returns:
+        Dict with ``updated_at`` and ``games`` list matching the frontend contract.
+    """
+    from sqlalchemy import select
+
+    result = []
+    for bs in boxscores:
+        if bs.game_state in _LIVE_STATES:
+            status = 'live'
+        elif bs.game_state in _FINAL_STATES:
+            status = 'final'
+        else:
+            status = 'scheduled'
+
+        snap = db.session.scalars(
+            select(OddsSnapshot)
+            .where(OddsSnapshot.game_id == bs.game_id)
+            .order_by(OddsSnapshot.fetched_at.desc())
+        ).first()
+
+        snap_open = db.session.scalars(
+            select(OddsSnapshot)
+            .where(OddsSnapshot.game_id == bs.game_id)
+            .order_by(OddsSnapshot.fetched_at)
+        ).first()
+
+        mf = db.session.get(ModelFair, bs.game_id)
+
+        if snap:
+            raw_a = american_to_implied(snap.away_ml)
+            raw_h = american_to_implied(snap.home_ml)
+            imp_a, imp_h = devig_two_way(raw_a, raw_h)
+        else:
+            imp_a, imp_h = 50.0, 50.0
+
+        fair_a = mf.away_fair if mf else imp_a
+        fair_h = mf.home_fair if mf else imp_h
+        edge_val = calc_edge(fair_a, imp_a) if snap else None
+
+        live_block = None
+        if status in ('live', 'final'):
+            live_block = {
+                'period':     bs.period or '1st',
+                'clock':      bs.clock or '20:00',
+                'away_score': bs.away_score,
+                'home_score': bs.home_score,
+                'away_sog':   bs.away_sog,
+                'home_sog':   bs.home_sog,
+            }
+
+        start_est_iso = None
+        if bs.start_time_est:
+            dt = bs.start_time_est
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_EASTERN)
+            start_est_iso = dt.isoformat()
+
+        if partner_id is not None:
+            ml = _get_partner_ml(bs.game_id, partner_id)
+        else:
+            ml = {'away': snap.away_ml, 'home': snap.home_ml} if snap else None
+
+        row = {
+            'game_id':      bs.game_id,
+            'away':         {'code': bs.away_abbrev, 'name': bs.away_name or bs.away_abbrev, 'record': '', 'l10': ''},
+            'home':         {'code': bs.home_abbrev, 'name': bs.home_name or bs.home_abbrev, 'record': '', 'l10': ''},
+            'start':        start_est_iso,
+            'start_est':    start_est_iso,
+            'game_date':    bs.game_date,
+            'venue':        bs.venue or '',
+            'status':       status,
+            'live':         live_block,
+            'ml':           ml,
+            'ml_open':      {'away': snap_open.away_ml, 'home': snap_open.home_ml} if snap_open else None,
+            'implied':      {'away': round(imp_a, 2), 'home': round(imp_h, 2)},
+            'fair':         {'away': round(fair_a, 2), 'home': round(fair_h, 2)},
+            'edge':         round(edge_val, 2) if edge_val is not None else None,
+            'movement_24h': _get_sparkline(bs.game_id),
         }
         result.append(row)
 
