@@ -59,6 +59,11 @@ def _refresh_boxscores():
     refresh_boxscores()
 
 
+def _prune_stale_boxscores():
+    from services.boxscore import prune_stale_boxscores
+    prune_stale_boxscores()
+
+
 def _refresh_dashboard_games():
     from services.dashboard_game import refresh_dashboard_games
     refresh_dashboard_games()
@@ -79,6 +84,7 @@ def start_scheduler(app):
     # Daily at 08:00 UTC — after overnight games have completed
     _scheduler.add_job(_with_ctx(_refresh_historical), 'cron',     hour=8, minute=0,                           id='refresh_historical',    replace_existing=True)
     _scheduler.add_job(_with_ctx(_refresh_boxscores),       'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_boxscores',       replace_existing=True)
+    _scheduler.add_job(_with_ctx(_prune_stale_boxscores),   'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='prune_stale_boxscores',   replace_existing=True)
     _scheduler.add_job(_with_ctx(_refresh_dashboard_games), 'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_dashboard_games', replace_existing=True)
 
     _scheduler.start()

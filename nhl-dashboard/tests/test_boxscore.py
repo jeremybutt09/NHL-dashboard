@@ -670,3 +670,145 @@ class TestBackfillBoxscoresMultiSeason:
             row = db.session.get(Boxscore, game_id)
             assert row is not None
             assert row.season_id == season
+
+
+# ── prune_stale_boxscores (Issue #155) ───────────────────────────────────────
+
+_STALE_ID = 2025030316  # ECF Game 6 — series ended before this game was played
+
+
+class TestPruneStaleBoxscores:
+    """Tests for prune_stale_boxscores() — Issue #155."""
+
+    def _api(self, today, game_ids):
+        """Build a minimal schedule API response for today with the given game IDs."""
+        return {
+            "gameWeek": [
+                {"date": today, "games": [{"id": gid} for gid in game_ids]}
+            ]
+        }
+
+    def test_prune_stale_boxscores_removes_game_not_in_api(self, db, boxscore_factory):
+        """A FUT boxscore row absent from the API response is deleted."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, _STALE_ID) is None
+
+    def test_prune_stale_boxscores_keeps_game_present_in_api(self, db, boxscore_factory):
+        """A boxscore row whose game_id appears in the API response is kept."""
+        today = _TODAY
+        boxscore_factory("TOR", "BOS", game_id=_GAME_ID, game_date=today, game_state="FUT")
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 0
+        assert db.session.get(Boxscore, _GAME_ID) is not None
+
+    def test_prune_stale_boxscores_removes_only_absent_game(self, db, boxscore_factory):
+        """When API returns game A but not C, only C is deleted; A is kept."""
+        today = _TODAY
+        boxscore_factory("TOR", "BOS", game_id=_GAME_ID, game_date=today, game_state="LIVE")
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, _GAME_ID) is not None
+        assert db.session.get(Boxscore, _STALE_ID) is None
+
+    def test_prune_stale_boxscores_only_affects_target_date(self, db, boxscore_factory):
+        """Boxscore rows for other dates are never touched."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+        boxscore_factory("TOR", "BOS", game_id=_GAME_ID, game_date="2020-01-01", game_state="FINAL")
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 1
+        assert db.session.get(Boxscore, _STALE_ID) is None
+        assert db.session.get(Boxscore, _GAME_ID) is not None  # historical row untouched
+
+    def test_prune_stale_boxscores_skips_when_date_not_in_api_response(self, db, boxscore_factory):
+        """When the API response has no block for today, no rows are deleted."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+
+        no_today_response = {"gameWeek": [{"date": "2020-01-01", "games": []}]}
+
+        with patch("nhl_client.get_schedule_now", return_value=no_today_response):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 0
+        assert db.session.get(Boxscore, _STALE_ID) is not None  # untouched
+
+    def test_prune_stale_boxscores_tolerates_api_error(self, db, boxscore_factory):
+        """API failure returns 0 and leaves all rows intact."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+
+        with patch("nhl_client.get_schedule_now", side_effect=RuntimeError("API down")):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 0
+        assert db.session.get(Boxscore, _STALE_ID) is not None  # untouched
+
+    def test_prune_stale_boxscores_returns_zero_when_nothing_to_prune(self, db):
+        """Returns 0 when no boxscore rows exist for today."""
+        today = _TODAY
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores()
+
+        assert count == 0
+
+    def test_refresh_boxscores_then_prune_removes_stale_game(self, db, boxscore_factory):
+        """After refresh_boxscores + prune_stale_boxscores (the scheduler pair), stale rows are gone."""
+        today = _TODAY
+        # Stale game: in boxscore table but absent from the NHL schedule API
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+        # Valid game: seeded in game table so refresh_boxscores has something to fetch
+        db.session.add(Game(game_id=_GAME_ID, game_date=today))
+        db.session.commit()
+
+        schedule_response = {
+            "gameWeek": [{"date": today, "games": [{"id": _GAME_ID}]}]
+        }
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API):
+            from services.boxscore import refresh_boxscores
+            refresh_boxscores()
+
+        with patch("nhl_client.get_schedule_now", return_value=schedule_response):
+            from services.boxscore import prune_stale_boxscores
+            prune_stale_boxscores()
+
+        assert db.session.get(Boxscore, _GAME_ID) is not None
+        assert db.session.get(Boxscore, _STALE_ID) is None
+
+    def test_get_games_today_excludes_stale_game_after_prune(self, db, boxscore_factory):
+        """build_today_response excludes a stale boxscore row after pruning runs."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            from services.slate import build_today_response
+            prune_stale_boxscores()
+            response = build_today_response()
+
+        assert response["games"] == []

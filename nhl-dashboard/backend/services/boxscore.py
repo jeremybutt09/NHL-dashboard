@@ -147,6 +147,67 @@ def refresh_boxscores() -> int:
     return count
 
 
+def prune_stale_boxscores(date_str: str | None = None) -> int:
+    """Delete boxscore rows for today whose game_id the NHL schedule API no longer returns.
+
+    Fetches today's schedule from /v1/schedule/now.  If today's date block is
+    found in the API response, removes any boxscore rows for that date whose
+    game_id is absent from the API's games list.  When today's block is absent
+    from the API response (e.g. the API is showing a different week), no rows
+    are pruned.
+
+    API failures are caught and logged; 0 is returned and no rows are deleted.
+
+    Args:
+        date_str: YYYY-MM-DD string to prune; defaults to today's Eastern Time
+            date.
+
+    Returns:
+        Number of boxscore rows deleted.
+    """
+    from sqlalchemy import delete as sa_delete
+    from services.time_utils import today_et
+
+    target_date = date_str or today_et()
+
+    try:
+        data = nhl_client.get_schedule_now()
+    except Exception as exc:
+        logger.warning('[boxscore] prune_stale_boxscores: schedule API error: %s', exc)
+        return 0
+
+    # Only prune when today's block is explicitly present in the API response.
+    today_block = next(
+        (w for w in data.get('gameWeek', []) if w.get('date') == target_date),
+        None,
+    )
+    if today_block is None:
+        logger.debug(
+            '[boxscore] prune_stale_boxscores: no block for %s in API response; skipping',
+            target_date,
+        )
+        return 0
+
+    api_game_ids = {g['id'] for g in today_block.get('games', []) if g.get('id')}
+
+    stmt = sa_delete(Boxscore).where(Boxscore.game_date == target_date)
+    if api_game_ids:
+        # Keep rows whose game_id appears in the API; delete the rest.
+        stmt = stmt.where(Boxscore.game_id.not_in(api_game_ids))
+    # When api_game_ids is empty, the WHERE on game_date alone removes all today's rows.
+
+    result = db.session.execute(stmt)
+    db.session.commit()
+
+    if result.rowcount:
+        logger.info(
+            '[boxscore] prune_stale_boxscores: removed %d stale rows for %s',
+            result.rowcount,
+            target_date,
+        )
+    return result.rowcount
+
+
 # 300 ms between requests — polite rate-limiting for long backfill runs.
 _BACKFILL_DELAY_SECONDS: float = 0.3
 
