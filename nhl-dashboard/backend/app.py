@@ -131,6 +131,13 @@ def create_app(config_class=Config, test_config=None):
             click.echo(f"Migration failed: {exc}", err=True)
             raise SystemExit(1)
 
+    @app.cli.command("backfill-boxscore-names")
+    def backfill_boxscore_names_cmd():
+        """Backfill empty away_name / home_name in boxscore from the team table (Issue #156)."""
+        from services.boxscore import backfill_team_names
+        count = backfill_team_names()
+        click.echo(f"Updated {count} boxscore rows with team names.")
+
     @app.cli.command("migrate-away-columns")
     def migrate_away_columns_cmd():
         """Migration (Issue #147): rename visiting_* columns to away_* in the game table.

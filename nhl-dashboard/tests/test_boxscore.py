@@ -812,3 +812,225 @@ class TestPruneStaleBoxscores:
             response = build_today_response()
 
         assert response["games"] == []
+
+
+# ── Issue #156: team name population at write time and backfill ──────────────
+
+class TestBuildBoxscoreTeamNameFallback:
+    """_build_boxscore() team_lookup parameter — Issue #156."""
+
+    def test_build_boxscore_uses_team_lookup_for_empty_api_name(self):
+        """_build_boxscore() fills empty team name from team_lookup dict."""
+        from datetime import datetime, timezone
+        from services.boxscore import _build_boxscore
+
+        raw = dict(_BOXSCORE_API)
+        raw["awayTeam"] = dict(raw["awayTeam"], name={})
+        raw["homeTeam"] = dict(raw["homeTeam"], name={})
+
+        lookup = {"TOR": "Toronto Maple Leafs", "BOS": "Boston Bruins"}
+        now = datetime.now(timezone.utc)
+        bs = _build_boxscore(raw, now, team_lookup=lookup)
+
+        assert bs.away_name == "Toronto Maple Leafs"
+        assert bs.home_name == "Boston Bruins"
+
+    def test_build_boxscore_prefers_api_name_over_lookup(self):
+        """_build_boxscore() keeps API name when it is non-empty."""
+        from datetime import datetime, timezone
+        from services.boxscore import _build_boxscore
+
+        lookup = {"TOR": "Override — Should Not Appear", "BOS": "Override — Should Not Appear"}
+        now = datetime.now(timezone.utc)
+        bs = _build_boxscore(_BOXSCORE_API, now, team_lookup=lookup)
+
+        assert bs.away_name == "Toronto Maple Leafs"
+        assert bs.home_name == "Boston Bruins"
+
+    def test_build_boxscore_no_lookup_leaves_empty_name_unchanged(self):
+        """_build_boxscore() with no lookup and empty API name stores empty string."""
+        from datetime import datetime, timezone
+        from services.boxscore import _build_boxscore
+
+        raw = dict(_BOXSCORE_API)
+        raw["awayTeam"] = dict(raw["awayTeam"], name={})
+        now = datetime.now(timezone.utc)
+        bs = _build_boxscore(raw, now)
+
+        assert bs.away_name == ""
+
+
+class TestBackfillTeamNames:
+    """Tests for backfill_team_names() — Issue #156."""
+
+    def _make_bs(self, db, game_id, away_abbrev, home_abbrev, away_name="", home_name=""):
+        """Create a Boxscore row with explicit (possibly empty) team names."""
+        row = Boxscore(
+            game_id=game_id,
+            away_abbrev=away_abbrev,
+            home_abbrev=home_abbrev,
+            away_name=away_name,
+            home_name=home_name,
+        )
+        db.session.add(row)
+        db.session.commit()
+        return row
+
+    def test_backfill_team_names_fills_empty_away_name(self, db, team_factory):
+        """backfill_team_names() fills empty away_name from team.full_name."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        row = self._make_bs(db, 9001, "TOR", "BOS", away_name="", home_name="Boston Bruins")
+
+        from services.boxscore import backfill_team_names
+        count = backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.away_name == "Toronto Maple Leafs"
+        assert count >= 1
+
+    def test_backfill_team_names_fills_empty_home_name(self, db, team_factory):
+        """backfill_team_names() fills empty home_name from team.full_name."""
+        team_factory("BOS", "Bruins", full_name="Boston Bruins")
+        row = self._make_bs(db, 9002, "TOR", "BOS",
+                            away_name="Toronto Maple Leafs", home_name="")
+
+        from services.boxscore import backfill_team_names
+        count = backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.home_name == "Boston Bruins"
+        assert count >= 1
+
+    def test_backfill_team_names_fills_null_away_name(self, db, team_factory):
+        """backfill_team_names() fills NULL away_name from team.full_name."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        row = Boxscore(game_id=9003, away_abbrev="TOR", home_abbrev="BOS",
+                       away_name=None, home_name="Boston Bruins")
+        db.session.add(row)
+        db.session.commit()
+
+        from services.boxscore import backfill_team_names
+        backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.away_name == "Toronto Maple Leafs"
+
+    def test_backfill_team_names_skips_already_populated_rows(self, db, team_factory):
+        """backfill_team_names() returns 0 when all names are already populated."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        team_factory("BOS", "Bruins", full_name="Boston Bruins")
+        self._make_bs(db, 9004, "TOR", "BOS",
+                      away_name="Toronto Maple Leafs", home_name="Boston Bruins")
+
+        from services.boxscore import backfill_team_names
+        count = backfill_team_names()
+
+        assert count == 0
+
+    def test_backfill_team_names_falls_back_to_name_when_full_name_null(self, db, team_factory):
+        """backfill_team_names() uses team.name when full_name is NULL."""
+        team_factory("TOR", "Maple Leafs", full_name=None)
+        row = self._make_bs(db, 9005, "TOR", "BOS",
+                            away_name="", home_name="Boston Bruins")
+
+        from services.boxscore import backfill_team_names
+        backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.away_name == "Maple Leafs"
+
+    def test_backfill_team_names_idempotent(self, db, team_factory):
+        """Running backfill_team_names() twice yields the same result; second run returns 0."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        row = self._make_bs(db, 9006, "TOR", "BOS",
+                            away_name="", home_name="Boston Bruins")
+
+        from services.boxscore import backfill_team_names
+        backfill_team_names()
+        count2 = backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.away_name == "Toronto Maple Leafs"
+        assert count2 == 0
+
+    def test_backfill_team_names_returns_count_of_rows_updated(self, db, team_factory):
+        """backfill_team_names() returns the number of boxscore rows updated."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        team_factory("BOS", "Bruins", full_name="Boston Bruins")
+        # Row 1: both names empty
+        self._make_bs(db, 9007, "TOR", "BOS", away_name="", home_name="")
+        # Row 2: only away empty
+        self._make_bs(db, 9008, "TOR", "BOS",
+                      away_name="", home_name="Boston Bruins")
+
+        from services.boxscore import backfill_team_names
+        count = backfill_team_names()
+
+        assert count == 2
+
+    def test_backfill_team_names_skips_unknown_abbrev(self, db):
+        """backfill_team_names() leaves name empty when no team row exists for the abbrev."""
+        row = Boxscore(game_id=9009, away_abbrev="XYZ", home_abbrev="ZZZ",
+                       away_name="", home_name="")
+        db.session.add(row)
+        db.session.commit()
+
+        from services.boxscore import backfill_team_names
+        backfill_team_names()
+
+        db.session.refresh(row)
+        assert row.away_name == ""
+        assert row.home_name == ""
+
+
+class TestRefreshBoxscoresTeamNamePopulation:
+    """refresh_boxscores() fills team names from the team table when API returns empty — Issue #156."""
+
+    def test_refresh_boxscores_populates_name_from_team_table(self, db, team_factory):
+        """refresh_boxscores() uses team lookup to fill empty API team name."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        team_factory("BOS", "Bruins", full_name="Boston Bruins")
+        db.session.add(Game(game_id=_GAME_ID, game_date=_TODAY))
+        db.session.commit()
+
+        raw = dict(_BOXSCORE_API)
+        raw["awayTeam"] = dict(raw["awayTeam"], name={"default": ""})
+        raw["homeTeam"] = dict(raw["homeTeam"], name={"default": ""})
+
+        with patch("nhl_client.get_boxscore", return_value=raw):
+            from services.boxscore import refresh_boxscores
+            refresh_boxscores()
+
+        row = db.session.get(Boxscore, _GAME_ID)
+        assert row.away_name == "Toronto Maple Leafs"
+        assert row.home_name == "Boston Bruins"
+
+
+class TestBackfillBoxscoreNamesCommand:
+    """Tests for the backfill-boxscore-names CLI command — Issue #156."""
+
+    def test_backfill_boxscore_names_command_updates_rows(self, app, db, team_factory):
+        """backfill-boxscore-names CLI command populates empty team names."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        row = Boxscore(game_id=_GAME_ID, away_abbrev="TOR", home_abbrev="BOS",
+                       away_name="", home_name="Boston Bruins")
+        db.session.add(row)
+        db.session.commit()
+
+        result = app.test_cli_runner().invoke(args=["backfill-boxscore-names"])
+
+        assert result.exit_code == 0
+        db.session.refresh(row)
+        assert row.away_name == "Toronto Maple Leafs"
+
+    def test_backfill_boxscore_names_command_echoes_count(self, app, db, team_factory):
+        """backfill-boxscore-names CLI command prints the number of rows updated."""
+        team_factory("TOR", "Maple Leafs", full_name="Toronto Maple Leafs")
+        row = Boxscore(game_id=_GAME_ID, away_abbrev="TOR", home_abbrev="BOS",
+                       away_name="", home_name="Boston Bruins")
+        db.session.add(row)
+        db.session.commit()
+
+        result = app.test_cli_runner().invoke(args=["backfill-boxscore-names"])
+
+        assert "1" in result.output

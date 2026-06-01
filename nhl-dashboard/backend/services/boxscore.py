@@ -19,12 +19,23 @@ from zoneinfo import ZoneInfo
 
 import nhl_client
 from extensions import db
-from models import Boxscore, Game
+from models import Boxscore, Game, Team
 from services.time_utils import now_et
 
 logger = logging.getLogger(__name__)
 
 _EASTERN = ZoneInfo("America/New_York")
+
+
+def _load_team_lookup() -> dict[str, str]:
+    """Build a tri_code → display_name mapping from the team table.
+
+    Returns:
+        Dict of ``{tri_code: display_name}`` where display_name is
+        ``full_name`` when set, falling back to ``name``.
+    """
+    rows = db.session.scalars(db.select(Team)).all()
+    return {t.tri_code: (t.full_name or t.name or '') for t in rows}
 
 
 def _parse_period(period_descriptor: dict) -> str | None:
@@ -50,13 +61,20 @@ def _parse_period(period_descriptor: dict) -> str | None:
     return ordinals.get(period_num, f'{period_num}th')
 
 
-def _build_boxscore(raw: dict, now: datetime) -> Boxscore:
+def _build_boxscore(
+    raw: dict,
+    now: datetime,
+    team_lookup: dict | None = None,
+) -> Boxscore:
     """Map a /v1/gamecenter/{id}/boxscore response to a Boxscore instance.
 
     Args:
         raw: Full API response dict for a single game boxscore.
         now: Current UTC datetime used for updated_at and as a fallback for
             start_time_est when startTimeUTC is missing or unparseable.
+        team_lookup: Optional dict mapping tri_code → display_name.  When
+            provided, an empty API team name is replaced with the value from
+            this lookup so no row is ever persisted with a blank name.
 
     Returns:
         An unsaved Boxscore instance ready for db.session.merge().
@@ -73,13 +91,19 @@ def _build_boxscore(raw: dict, now: datetime) -> Boxscore:
     except Exception:
         start_est = now.astimezone(_EASTERN)
 
-    # Team names
+    # Team names — fall back to team_lookup when API returns empty string
     away = raw.get('awayTeam', {})
     home = raw.get('homeTeam', {})
     away_name_raw = away.get('name', {})
     home_name_raw = home.get('name', {})
     away_name = away_name_raw.get('default', '') if isinstance(away_name_raw, dict) else (away_name_raw or '')
     home_name = home_name_raw.get('default', '') if isinstance(home_name_raw, dict) else (home_name_raw or '')
+
+    if team_lookup:
+        if not away_name:
+            away_name = team_lookup.get(away.get('abbrev', ''), '')
+        if not home_name:
+            home_name = team_lookup.get(home.get('abbrev', ''), '')
 
     # Period and clock
     period = _parse_period(raw.get('periodDescriptor') or {})
@@ -129,6 +153,7 @@ def refresh_boxscores() -> int:
         return 0
 
     now = now_et()
+    team_lookup = _load_team_lookup()
     count = 0
 
     for game_id in game_ids:
@@ -138,7 +163,7 @@ def refresh_boxscores() -> int:
             logger.warning('[boxscore] Failed to fetch game %s: %s', game_id, exc)
             continue
 
-        record = _build_boxscore(raw, now)
+        record = _build_boxscore(raw, now, team_lookup=team_lookup)
         db.session.merge(record)
         count += 1
 
@@ -246,6 +271,7 @@ def backfill_boxscores(
 
     total = len(game_ids)
     now = now_et()
+    team_lookup = _load_team_lookup()
     count = 0
     skipped = 0
 
@@ -264,7 +290,7 @@ def backfill_boxscores(
             time.sleep(delay)
             continue
 
-        record = _build_boxscore(raw, now)
+        record = _build_boxscore(raw, now, team_lookup=team_lookup)
         db.session.merge(record)
         count += 1
 
@@ -281,4 +307,55 @@ def backfill_boxscores(
         '[backfill_boxscores] Season %s: %d upserted, %d skipped',
         season_label, count, skipped,
     )
+    return count
+
+
+def backfill_team_names() -> int:
+    """Update boxscore rows with empty or NULL team names from the team table.
+
+    Queries the team table to build a tri_code → display_name mapping, then
+    finds any boxscore row whose away_name or home_name is NULL or empty and
+    fills it from the mapping.  Idempotent: rows already populated are never
+    touched.
+
+    Returns:
+        Number of boxscore rows updated.
+    """
+    from sqlalchemy import or_
+
+    lookup = _load_team_lookup()
+    if not lookup:
+        return 0
+
+    rows = db.session.scalars(
+        db.select(Boxscore).where(
+            or_(
+                Boxscore.away_name.is_(None),
+                Boxscore.away_name == '',
+                Boxscore.home_name.is_(None),
+                Boxscore.home_name == '',
+            )
+        )
+    ).all()
+
+    count = 0
+    for row in rows:
+        updated = False
+        if not row.away_name and row.away_abbrev:
+            resolved = lookup.get(row.away_abbrev, '')
+            if resolved:
+                row.away_name = resolved
+                updated = True
+        if not row.home_name and row.home_abbrev:
+            resolved = lookup.get(row.home_abbrev, '')
+            if resolved:
+                row.home_name = resolved
+                updated = True
+        if updated:
+            count += 1
+
+    if count:
+        db.session.commit()
+
+    logger.info('[boxscore] backfill_team_names: updated %d rows', count)
     return count
