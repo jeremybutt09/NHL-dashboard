@@ -293,6 +293,7 @@ def backfill_boxscores(
     delay: float = _BACKFILL_DELAY_SECONDS,
     season: int | None = None,
     max_workers: int = 4,
+    force: bool = False,
 ) -> int:
     """Fetch and upsert boxscore data for every game in the game table.
 
@@ -306,6 +307,11 @@ def backfill_boxscores(
     partition does not abort the remaining partitions.  The ``season``
     filter restricts processing to a single season's month-buckets.
 
+    When ``force`` is ``False`` (the default), game IDs that already have a
+    row in the ``boxscore`` table are skipped before partitioning so that an
+    interrupted backfill can be resumed without re-fetching already-loaded
+    data.  Pass ``force=True`` to re-fetch all games regardless.
+
     Args:
         delay: Seconds to sleep between successive API calls within each
             worker.  Defaults to ``_BACKFILL_DELAY_SECONDS`` (0.3 s).
@@ -315,14 +321,33 @@ def backfill_boxscores(
         max_workers: Maximum number of concurrent worker threads (default 4).
             Low values avoid NHL API throttling; pass ``1`` for a fully
             sequential single-worker run.
+        force: When ``True``, skip the already-loaded check and re-fetch every
+            game.  Defaults to ``False``.
 
     Returns:
-        Number of boxscores successfully upserted.
+        Number of boxscores successfully upserted (skipped games are not
+        counted).
     """
     query = db.select(Game.game_id, Game.game_date)
     if season is not None:
         query = query.where(Game.season == season)
     rows = db.session.execute(query).all()
+
+    if not rows:
+        return 0
+
+    # Determine which game IDs already have a boxscore row so we can skip them.
+    if not force:
+        loaded_ids: set[int] = set(
+            db.session.scalars(db.select(Boxscore.game_id)).all()
+        )
+        pending_rows = [(gid, gdate) for gid, gdate in rows if gid not in loaded_ids]
+        skipped_count = len(rows) - len(pending_rows)
+        if skipped_count:
+            logger.info(
+                '[backfill_boxscores] Skipping %d already-loaded game IDs', skipped_count
+            )
+        rows = pending_rows
 
     if not rows:
         return 0

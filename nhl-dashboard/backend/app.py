@@ -96,10 +96,14 @@ def create_app(config_class=Config, test_config=None):
         "--max-workers", "max_workers", type=int, default=4,
         help="Parallel worker threads (default 4).  Pass 1 for sequential.",
     )
-    def backfill_boxscores_cmd(season, max_workers):
+    @click.option(
+        "--force", is_flag=True, default=False,
+        help="Re-fetch all games even if already loaded in the boxscore table.",
+    )
+    def backfill_boxscores_cmd(season, max_workers, force):
         """One-time backfill: upsert boxscores for all games in the game table (Issue #135)."""
         from services.boxscore import backfill_boxscores
-        count = backfill_boxscores(season=season, max_workers=max_workers)
+        count = backfill_boxscores(season=season, max_workers=max_workers, force=force)
         click.echo(f"Backfilled {count} boxscores.")
 
     @app.cli.command("migrate-timestamps-to-et")

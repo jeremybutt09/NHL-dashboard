@@ -1132,3 +1132,146 @@ class TestBackfillBoxscoresCommandMaxWorkers:
         assert result.exit_code == 0
         assert "1" in result.output
         assert db.session.get(Boxscore, _GAME_ID) is not None
+
+
+# ── Resume-aware backfill: skip already-loaded game IDs (Issue #158) ──────────
+
+class TestBackfillBoxscoresResumeAware:
+    """backfill_boxscores() skips game IDs already in the boxscore table (Issue #158).
+
+    Acceptance criteria:
+      - All games already loaded → nothing fetched, returns 0
+      - No games loaded → all games fetched
+      - Partial load → only missing games fetched
+      - force=True → all games fetched regardless of existing rows
+    """
+
+    def _seed_games(self, db, game_date_pairs):
+        """Seed (game_id, game_date) pairs into the game table."""
+        for game_id, game_date in game_date_pairs:
+            db.session.add(Game(game_id=game_id, game_date=game_date))
+        db.session.commit()
+
+    def test_backfill_boxscores_skips_all_when_all_already_loaded(self, db):
+        """Returns 0 and never calls the API when all game IDs already have a boxscore row."""
+        self._seed_games(db, [(4001, "2026-01-10"), (4002, "2026-01-11")])
+        db.session.add(Boxscore(game_id=4001))
+        db.session.add(Boxscore(game_id=4002))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore") as mock_get, \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        mock_get.assert_not_called()
+        assert count == 0
+
+    def test_backfill_boxscores_fetches_all_when_no_boxscores_exist(self, db):
+        """Fetches all game IDs when the boxscore table is empty."""
+        self._seed_games(db, [(4011, "2026-01-10"), (4012, "2026-01-11")])
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        assert count == 2
+        assert db.session.get(Boxscore, 4011) is not None
+        assert db.session.get(Boxscore, 4012) is not None
+
+    def test_backfill_boxscores_fetches_only_missing_games(self, db):
+        """Fetches only game IDs absent from the boxscore table, skips existing ones."""
+        self._seed_games(db, [
+            (4021, "2026-01-10"),  # already loaded
+            (4022, "2026-01-11"),  # missing — must be fetched
+        ])
+        db.session.add(Boxscore(game_id=4021))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore) as mock_get, \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores()
+
+        # Only the missing game should be fetched
+        fetched_ids = [call.args[0] for call in mock_get.call_args_list]
+        assert 4021 not in fetched_ids
+        assert 4022 in fetched_ids
+        assert count == 1
+        assert db.session.get(Boxscore, 4022) is not None
+
+    def test_backfill_boxscores_force_fetches_all_despite_existing_rows(self, db):
+        """force=True bypasses skip logic and fetches all game IDs."""
+        self._seed_games(db, [(4031, "2026-01-10"), (4032, "2026-01-11")])
+        db.session.add(Boxscore(game_id=4031))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore) as mock_get, \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(force=True)
+
+        fetched_ids = [call.args[0] for call in mock_get.call_args_list]
+        assert 4031 in fetched_ids
+        assert 4032 in fetched_ids
+        assert count == 2
+
+    def test_backfill_boxscores_logs_skipped_count(self, db, caplog):
+        """Skipped game count is logged at INFO level."""
+        import logging
+        self._seed_games(db, [(4041, "2026-01-10"), (4042, "2026-01-11")])
+        db.session.add(Boxscore(game_id=4041))
+        db.session.commit()
+
+        def fake_boxscore(game_id):
+            return dict(_BOXSCORE_API, id=game_id)
+
+        with caplog.at_level(logging.INFO, logger="services.boxscore"), \
+             patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            backfill_boxscores()
+
+        assert any("skip" in rec.message.lower() or "1" in rec.message for rec in caplog.records)
+
+
+class TestBackfillBoxscoresCommandForce:
+    """Tests for --force CLI flag (Issue #158)."""
+
+    def test_backfill_boxscores_command_force_flag_fetches_all(self, app, db):
+        """backfill-boxscores --force re-fetches already-loaded game IDs."""
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.add(Boxscore(game_id=_GAME_ID))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API) as mock_get, \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(
+                args=["backfill-boxscores", "--force"]
+            )
+
+        assert result.exit_code == 0
+        mock_get.assert_called_once_with(_GAME_ID)
+
+    def test_backfill_boxscores_command_no_force_skips_loaded_games(self, app, db):
+        """backfill-boxscores without --force skips already-loaded game IDs."""
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.add(Boxscore(game_id=_GAME_ID))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore") as mock_get, \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(args=["backfill-boxscores"])
+
+        assert result.exit_code == 0
+        mock_get.assert_not_called()
