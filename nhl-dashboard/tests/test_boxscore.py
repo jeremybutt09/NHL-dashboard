@@ -695,7 +695,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 1
         assert db.session.get(Boxscore, _STALE_ID) is None
@@ -707,7 +707,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 0
         assert db.session.get(Boxscore, _GAME_ID) is not None
@@ -720,7 +720,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 1
         assert db.session.get(Boxscore, _GAME_ID) is not None
@@ -734,7 +734,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 1
         assert db.session.get(Boxscore, _STALE_ID) is None
@@ -749,7 +749,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=no_today_response):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 0
         assert db.session.get(Boxscore, _STALE_ID) is not None  # untouched
@@ -761,7 +761,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", side_effect=RuntimeError("API down")):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 0
         assert db.session.get(Boxscore, _STALE_ID) is not None  # untouched
@@ -772,7 +772,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
             from services.boxscore import prune_stale_boxscores
-            count = prune_stale_boxscores()
+            count = prune_stale_boxscores(date_str=today)
 
         assert count == 0
 
@@ -795,7 +795,7 @@ class TestPruneStaleBoxscores:
 
         with patch("nhl_client.get_schedule_now", return_value=schedule_response):
             from services.boxscore import prune_stale_boxscores
-            prune_stale_boxscores()
+            prune_stale_boxscores(date_str=today)
 
         assert db.session.get(Boxscore, _GAME_ID) is not None
         assert db.session.get(Boxscore, _STALE_ID) is None
@@ -808,7 +808,7 @@ class TestPruneStaleBoxscores:
         with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
             from services.boxscore import prune_stale_boxscores
             from services.slate import build_today_response
-            prune_stale_boxscores()
+            prune_stale_boxscores(date_str=today)
             response = build_today_response()
 
         assert response["games"] == []
@@ -1243,6 +1243,89 @@ class TestBackfillBoxscoresResumeAware:
             backfill_boxscores()
 
         assert any("skip" in rec.message.lower() or "1" in rec.message for rec in caplog.records)
+
+
+# ── Issue #159: prune_stale_boxscores must also prune the game table ──────────
+
+class TestPruneStaleBoxscoresAlsoPrunesGameTable:
+    """prune_stale_boxscores() also deletes stale rows from the game table (Issue #159).
+
+    Without this, refresh_boxscores() re-reads game IDs from the game table on
+    the next scheduler tick and re-inserts the pruned boxscore row, undoing the
+    prune.
+    """
+
+    def _api(self, today, game_ids):
+        return {
+            "gameWeek": [
+                {"date": today, "games": [{"id": gid} for gid in game_ids]}
+            ]
+        }
+
+    def test_prune_stale_boxscores_deletes_stale_game_row(self, db, boxscore_factory):
+        """prune_stale_boxscores() removes the game table row for a pruned game_id."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+        db.session.add(Game(game_id=_STALE_ID, game_date=today))
+        db.session.commit()
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores(date_str=today)
+
+        assert count == 1
+        assert db.session.get(Boxscore, _STALE_ID) is None
+        assert db.session.get(Game, _STALE_ID) is None
+
+    def test_prune_stale_boxscores_keeps_valid_game_row(self, db, boxscore_factory):
+        """prune_stale_boxscores() leaves the game row intact for a game still in the API."""
+        today = _TODAY
+        boxscore_factory("TOR", "BOS", game_id=_GAME_ID, game_date=today, game_state="FUT")
+        db.session.add(Game(game_id=_GAME_ID, game_date=today))
+        db.session.commit()
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores(date_str=today)
+
+        assert count == 0
+        assert db.session.get(Boxscore, _GAME_ID) is not None
+        assert db.session.get(Game, _GAME_ID) is not None
+
+    def test_prune_stale_boxscores_removes_only_stale_game_row(self, db, boxscore_factory):
+        """Only the stale game's row is removed from game; the valid game row is kept."""
+        today = _TODAY
+        boxscore_factory("TOR", "BOS", game_id=_GAME_ID, game_date=today, game_state="LIVE")
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+        db.session.add(Game(game_id=_GAME_ID, game_date=today))
+        db.session.add(Game(game_id=_STALE_ID, game_date=today))
+        db.session.commit()
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [_GAME_ID])):
+            from services.boxscore import prune_stale_boxscores
+            count = prune_stale_boxscores(date_str=today)
+
+        assert count == 1
+        assert db.session.get(Game, _GAME_ID) is not None
+        assert db.session.get(Game, _STALE_ID) is None
+
+    def test_prune_stale_then_refresh_does_not_reinsert_stale_game(self, db, boxscore_factory):
+        """After prune, refresh_boxscores() does not re-fetch or re-insert the stale game."""
+        today = _TODAY
+        boxscore_factory("CAR", "MTL", game_id=_STALE_ID, game_date=today, game_state="FUT")
+        db.session.add(Game(game_id=_STALE_ID, game_date=today))
+        db.session.commit()
+
+        with patch("nhl_client.get_schedule_now", return_value=self._api(today, [])):
+            from services.boxscore import prune_stale_boxscores
+            prune_stale_boxscores(date_str=today)
+
+        with patch("nhl_client.get_boxscore") as mock_get:
+            from services.boxscore import refresh_boxscores
+            refresh_boxscores()
+
+        mock_get.assert_not_called()
+        assert db.session.get(Boxscore, _STALE_ID) is None
 
 
 class TestBackfillBoxscoresCommandForce:

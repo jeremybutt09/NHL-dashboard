@@ -8,14 +8,18 @@ Acceptance criteria:
   - Re-runs upsert existing rows rather than appending duplicates.
   - status is derived from boxscore.game_state: 'live', 'final', or 'scheduled'.
 """
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
 
 from models import Boxscore, DashboardGame
+from services.time_utils import today_et
 
-_TODAY = date.today().isoformat()
+# Use ET date so tests remain consistent with refresh_dashboard_games(),
+# which filters by today_et() — these can diverge near midnight when
+# the local machine's date differs from Eastern Time.
+_TODAY = today_et()
 _GAME_ID = 2026030247
 _START_EST = datetime(2026, 5, 25, 19, 0, tzinfo=timezone.utc)
 

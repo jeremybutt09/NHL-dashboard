@@ -224,6 +224,14 @@ def prune_stale_boxscores(date_str: str | None = None) -> int:
     # When api_game_ids is empty, the WHERE on game_date alone removes all today's rows.
 
     result = db.session.execute(stmt)
+
+    # Also remove the matching game table rows so refresh_boxscores() cannot
+    # re-fetch and re-insert the pruned games on the next scheduler tick.
+    game_stmt = sa_delete(Game).where(Game.game_date == target_date)
+    if api_game_ids:
+        game_stmt = game_stmt.where(Game.game_id.not_in(api_game_ids))
+    db.session.execute(game_stmt)
+
     db.session.commit()
 
     if result.rowcount:
