@@ -11,9 +11,11 @@ populated by the historical ingest pipeline (models.Game).
 
 backfill_boxscores() (Issue #135) is a one-time (but re-runnable) operation
 that fetches a boxscore for every game_id in the `game` table, not just today.
+Issue #157 added month-partitioned parallel execution via ThreadPoolExecutor.
 """
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -237,75 +239,136 @@ def prune_stale_boxscores(date_str: str | None = None) -> int:
 _BACKFILL_DELAY_SECONDS: float = 0.3
 
 
-def backfill_boxscores(
-    delay: float = _BACKFILL_DELAY_SECONDS,
-    season: int | None = None,
-) -> int:
-    """Fetch and upsert boxscore data for every game in the game table.
+def _fetch_month_partition(
+    game_ids: list[int],
+    delay: float,
+    team_lookup: dict,
+    now: datetime,
+) -> tuple[list[Boxscore], int]:
+    """Fetch API boxscore data for one month's games. Does not access the database.
 
-    One-time (but re-runnable) backfill.  Iterates game_ids in the
-    ``game`` table (optionally filtered to a single season), calls
-    ``/v1/gamecenter/{id}/boxscore`` for each, and upserts the result.
-    API failures for individual games are logged and skipped so a single
-    bad game does not abort the run.  Commits in batches of 100 to bound
-    transaction size.
+    Designed to run inside a ThreadPoolExecutor worker alongside other month
+    partitions.  Returns built Boxscore instances for the caller to persist.
+    Individual game failures are logged and skipped without raising.
 
     Args:
-        delay: Seconds to sleep between successive API calls.  Defaults to
-            ``_BACKFILL_DELAY_SECONDS`` (0.3 s).  Pass ``0`` in tests to
-            keep runs fast.
-        season: Optional season integer (e.g. ``20252026``).  When set, only
-            games whose ``season`` column matches are processed.  Omit or
-            pass ``None`` to process the full table.
+        game_ids: Ordered list of game IDs to fetch for this month.
+        delay: Seconds to sleep between successive API calls (rate limiting).
+        team_lookup: tri_code → display_name mapping for name fallback.
+        now: Timestamp used for ``updated_at`` on each Boxscore instance.
 
     Returns:
-        Number of boxscores successfully upserted.
+        Tuple of ``(records, skipped)`` where ``records`` is a list of
+        unsaved Boxscore instances and ``skipped`` is the count of failures.
     """
-    query = db.select(Game.game_id)
-    if season is not None:
-        query = query.where(Game.season == season)
-    game_ids = db.session.scalars(query).all()
-
-    if not game_ids:
-        return 0
-
-    total = len(game_ids)
-    now = now_et()
-    team_lookup = _load_team_lookup()
-    count = 0
+    records: list[Boxscore] = []
     skipped = 0
 
-    for i, game_id in enumerate(game_ids):
+    for game_id in game_ids:
         try:
             raw = nhl_client.get_boxscore(game_id)
         except Exception as exc:
-            logger.warning('[backfill_boxscores] Failed to fetch game %s: %s', game_id, exc)
+            logger.warning(
+                '[backfill_boxscores] Failed to fetch game %s: %s', game_id, exc
+            )
             skipped += 1
             time.sleep(delay)
             continue
 
         if not raw or 'id' not in raw:
-            logger.warning('[backfill_boxscores] No data for game_id %s, skipping', game_id)
+            logger.warning(
+                '[backfill_boxscores] No data for game_id %s, skipping', game_id
+            )
             skipped += 1
             time.sleep(delay)
             continue
 
-        record = _build_boxscore(raw, now, team_lookup=team_lookup)
-        db.session.merge(record)
-        count += 1
-
-        # Commit every 100 rows to avoid holding an unbounded transaction.
-        if (i + 1) % 100 == 0:
-            db.session.commit()
-            logger.info('[backfill_boxscores] Progress: %d/%d', i + 1, total)
-
+        records.append(_build_boxscore(raw, now, team_lookup=team_lookup))
         time.sleep(delay)
 
+    return records, skipped
+
+
+def backfill_boxscores(
+    delay: float = _BACKFILL_DELAY_SECONDS,
+    season: int | None = None,
+    max_workers: int = 4,
+) -> int:
+    """Fetch and upsert boxscore data for every game in the game table.
+
+    One-time (but re-runnable) backfill.  Groups game IDs from the ``game``
+    table by year-month and fans the partitions out across up to
+    ``max_workers`` concurrent threads, each fetching one month's games
+    sequentially with the configured ``delay`` between requests.  Results are
+    collected in the calling thread and committed in batches of 100 rows.
+
+    API failures for individual games are logged and skipped; a failed
+    partition does not abort the remaining partitions.  The ``season``
+    filter restricts processing to a single season's month-buckets.
+
+    Args:
+        delay: Seconds to sleep between successive API calls within each
+            worker.  Defaults to ``_BACKFILL_DELAY_SECONDS`` (0.3 s).
+            Pass ``0`` in tests to keep runs fast.
+        season: Optional season integer (e.g. ``20252026``).  When set, only
+            games whose ``season`` column matches are processed.
+        max_workers: Maximum number of concurrent worker threads (default 4).
+            Low values avoid NHL API throttling; pass ``1`` for a fully
+            sequential single-worker run.
+
+    Returns:
+        Number of boxscores successfully upserted.
+    """
+    query = db.select(Game.game_id, Game.game_date)
+    if season is not None:
+        query = query.where(Game.season == season)
+    rows = db.session.execute(query).all()
+
+    if not rows:
+        return 0
+
+    # Group game IDs by year-month for parallel fan-out.
+    month_buckets: dict[str, list[int]] = {}
+    for game_id, game_date in rows:
+        ym = game_date[:7] if game_date else 'unknown'
+        month_buckets.setdefault(ym, []).append(game_id)
+
+    now = now_et()
+    team_lookup = _load_team_lookup()
+    all_records: list[Boxscore] = []
+    total_skipped = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_ym = {
+            executor.submit(_fetch_month_partition, game_ids, delay, team_lookup, now): ym
+            for ym, game_ids in sorted(month_buckets.items())
+        }
+        for future in as_completed(future_to_ym):
+            ym = future_to_ym[future]
+            try:
+                records, skipped = future.result()
+                all_records.extend(records)
+                total_skipped += skipped
+                logger.info('[backfill_boxscores] Partition %s: fetched %d', ym, len(records))
+            except Exception as exc:
+                logger.error('[backfill_boxscores] Partition %s failed: %s', ym, exc)
+
+    # Write all fetched records to the DB in the calling thread,
+    # committing every 100 rows to bound transaction size.
+    count = 0
+    for i, record in enumerate(all_records):
+        db.session.merge(record)
+        count += 1
+        if (i + 1) % 100 == 0:
+            db.session.commit()
+            logger.info('[backfill_boxscores] Progress: committed %d rows', i + 1)
+
     db.session.commit()
+
     season_label = str(season) if season is not None else 'all'
     logger.info(
         '[backfill_boxscores] Season %s: %d upserted, %d skipped',
-        season_label, count, skipped,
+        season_label, count, total_skipped,
     )
     return count
 

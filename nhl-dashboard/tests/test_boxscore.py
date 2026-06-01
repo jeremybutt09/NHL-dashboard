@@ -1034,3 +1034,101 @@ class TestBackfillBoxscoreNamesCommand:
         result = app.test_cli_runner().invoke(args=["backfill-boxscore-names"])
 
         assert "1" in result.output
+
+
+# ── parallel backfill_boxscores by month partition (Issue #157) ───────────────
+
+class TestBackfillBoxscoresParallel:
+    """Month-partitioned parallel backfill_boxscores (Issue #157).
+
+    Acceptance criteria:
+      - max_workers=1 processes all month partitions sequentially.
+      - max_workers>1 fans out partitions concurrently and upserts all rows.
+      - An API failure for one game does not abort other month partitions.
+    """
+
+    def _seed_games(self, db, game_date_pairs):
+        """Seed (game_id, game_date) pairs into the game table."""
+        for game_id, game_date in game_date_pairs:
+            db.session.add(Game(game_id=game_id, game_date=game_date))
+        db.session.commit()
+
+    def test_backfill_boxscores_single_worker_processes_all_partitions(self, db):
+        """max_workers=1 processes all month partitions and upserts every row."""
+        self._seed_games(db, [
+            (5001, "2026-01-15"),
+            (5002, "2026-01-25"),
+            (5003, "2026-02-10"),
+        ])
+
+        def fake_boxscore(gid):
+            return dict(_BOXSCORE_API, id=gid)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(max_workers=1)
+
+        assert count == 3
+        for gid in [5001, 5002, 5003]:
+            assert db.session.get(Boxscore, gid) is not None
+
+    def test_backfill_boxscores_multi_worker_upserts_all_months(self, db):
+        """max_workers=2 fans out month partitions concurrently and upserts all games."""
+        self._seed_games(db, [
+            (5011, "2026-01-10"),
+            (5012, "2026-01-20"),
+            (5013, "2026-02-15"),
+        ])
+
+        def fake_boxscore(gid):
+            return dict(_BOXSCORE_API, id=gid)
+
+        with patch("nhl_client.get_boxscore", side_effect=fake_boxscore), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(max_workers=2)
+
+        assert count == 3
+        for gid in [5011, 5012, 5013]:
+            assert db.session.get(Boxscore, gid) is not None
+
+    def test_backfill_boxscores_failure_isolation_between_partitions(self, db):
+        """API failure in one month's game does not abort the other month's partition."""
+        self._seed_games(db, [
+            (5021, "2026-01-10"),  # Jan — API will raise
+            (5022, "2026-02-10"),  # Feb — will succeed
+        ])
+
+        def side_effect(gid):
+            if gid == 5021:
+                raise RuntimeError("timeout")
+            return dict(_BOXSCORE_API, id=gid)
+
+        with patch("nhl_client.get_boxscore", side_effect=side_effect), \
+             patch("time.sleep"):
+            from services.boxscore import backfill_boxscores
+            count = backfill_boxscores(max_workers=2)
+
+        assert count == 1
+        assert db.session.get(Boxscore, 5021) is None
+        assert db.session.get(Boxscore, 5022) is not None
+
+
+class TestBackfillBoxscoresCommandMaxWorkers:
+    """Tests for --max-workers CLI option (Issue #157)."""
+
+    def test_backfill_boxscores_command_accepts_max_workers_option(self, app, db):
+        """backfill-boxscores --max-workers 1 exits cleanly and echoes count."""
+        db.session.add(Game(game_id=_GAME_ID, game_date="2026-01-01"))
+        db.session.commit()
+
+        with patch("nhl_client.get_boxscore", return_value=_BOXSCORE_API), \
+             patch("time.sleep"):
+            result = app.test_cli_runner().invoke(
+                args=["backfill-boxscores", "--max-workers", "1"]
+            )
+
+        assert result.exit_code == 0
+        assert "1" in result.output
+        assert db.session.get(Boxscore, _GAME_ID) is not None
