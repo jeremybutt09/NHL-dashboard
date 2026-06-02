@@ -7,6 +7,9 @@ This document describes all background jobs that drive data writes to the NHL Da
 ## End-to-End Data Flow
 
 ```
+NHL /v1/roster/{team}/{season}  [one call per team, 32 teams total]
+  └──> backfill_dim_player()  ──> dim_player (upsert by player_id)
+
 NHL /v1/score/now
   └──> refresh_nhl_odds()  ──> nhl_odds_partner (upsert), nhl_odds_line (insert)
 
@@ -46,6 +49,7 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 | `refresh_dashboard_games` | Every 60 seconds | `refresh_dashboard_games()` in `services/dashboard_game.py` | `dashboard_game` | Upsert by `game_id` |
 | `refresh_historical` | Daily at 08:00 UTC | `refresh_recent_historical_games()` in `services/historical.py` | `game` | Upsert (30-day window) |
 | *(on-demand)* | Manual / startup backfill | `ingest_historical_games()` in `services/historical.py` | `game` | Full upsert by `game_id` |
+| *(on-demand)* | Manual / notebook-driven | `backfill_dim_player()` (Issue #165 notebook) | `dim_player` | Upsert by `player_id` |
 
 ---
 
@@ -176,6 +180,30 @@ The resulting `away_fair` and `home_fair` values sum to 100 and are returned dir
 
 ---
 
+### `backfill_dim_player` — On-Demand Roster Backfill
+
+**Source:** `nhl-dashboard/notebooks/` (Issue #165 backfill notebook)
+
+**What it does:** Iterates all 32 NHL team tricodes, calls `GET /v1/roster/{team}/{season}`
+for each team with the current season string, and upserts the player records into
+`dim_player` using `db.session.merge()` on `player_id`. Players who appear on multiple
+rosters (trades, waivers) are upserted in place — no duplicates. `sweater_number` and
+other mutable fields are overwritten on each run so the table stays current.
+
+**Tables read:** none  
+**Tables written:** `dim_player` (upsert by `player_id`)  
+**Update strategy:** Upsert — `db.session.merge()` on `player_id` PK
+
+**Triggering:** Not a scheduled APScheduler job. Run the backfill notebook (Issue #165) once
+per season or whenever roster data needs refreshing. No scheduler registration is required
+for the MVP.
+
+**`dim_player` role:** Provides the biographical anchor for future fact tables
+(`boxscore_skater_stats`, `boxscore_goalie_stats`). `player_id` values in those fact tables
+correspond to `dim_player.player_id` by convention; FK constraints are not enforced for MVP.
+
+---
+
 ### `backfill_boxscores` — On-Demand Backfill
 
 **Source:** `nhl-dashboard/backend/services/boxscore.py` → `backfill_boxscores()`
@@ -223,3 +251,4 @@ Alternatively, set `TESTING = True` in the app config — this skips `start_sche
 | `nhl-dashboard/backend/odds_client.py` | `fetch_odds(game_ids)` — currently a stub fixture |
 | `nhl-dashboard/backend/models.py` | SQLAlchemy models for all tables |
 | `nhl-dashboard/backend/services/historical.py` | `ingest_historical_games()` and `refresh_recent_historical_games()` — historical game data |
+| `nhl-dashboard/notebooks/` (Issue #165) | `backfill_dim_player()` — roster backfill for `dim_player` |

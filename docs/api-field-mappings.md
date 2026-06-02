@@ -211,6 +211,52 @@ updated to `game` table name in Issue #131.
 
 ---
 
+## Endpoint 5 — `/v1/roster/{team}/{season}`
+
+**Base URL:** `https://api-web.nhle.com/v1`
+
+Called once per team per season when populating `dim_player`. The backfill notebook
+(Issue #165) iterates all 32 NHL team tricodes and the current season string
+(e.g. `20252026`). Parsed and persisted using `db.session.merge()` on `player_id`
+(idempotent upsert).
+
+### → `dim_player` table
+
+One row per player; all fields sourced from the `forwards`, `defensemen`, and `goalies`
+arrays in the response. All three arrays share the same per-player object shape.
+
+| API JSON path | `dim_player` column | Transform |
+|---|---|---|
+| `forwards[].id` / `defensemen[].id` / `goalies[].id` | `player_id` | Integer primary key — not auto-generated |
+| `forwards[].firstName.default` | `first_name` | Extracted from nested `default` key |
+| `forwards[].lastName.default` | `last_name` | Extracted from nested `default` key |
+| `forwards[].sweaterNumber` | `sweater_number` | Integer; overwritten on each upsert |
+| `forwards[].positionCode` | `position` | String, e.g. `C`, `L`, `R`, `D`, `G` |
+| `forwards[].shootsCatches` | `shoots_catches` | `L` or `R` |
+| `forwards[].heightInInches` | `height_in_inches` | Integer |
+| `forwards[].weightInPounds` | `weight_in_pounds` | Integer |
+| `forwards[].birthDate` | `birth_date` | String in `YYYY-MM-DD` format |
+| `forwards[].birthCountry` | `birth_country` | ISO 3-letter code (e.g. `CAN`, `USA`) |
+| `forwards[].headshot` | `headshot_url` | CDN URL string |
+| *(computed at persist time)* | `updated_at` | Eastern timestamp set by the persist function |
+
+The same field paths apply to `defensemen[]` and `goalies[]` — all three arrays are
+iterated in a single pass when backfilling.
+
+### Ignored / unused fields from `/v1/roster/{team}/{season}`
+
+| API JSON path | Notes |
+|---|---|
+| `forwards[].lastName.cs` / `.fr` etc. | Localized name variants — only `default` is stored |
+| `forwards[].firstName.cs` / `.fr` etc. | Same as above |
+| `forwards[].headshots[]` | Alternative headshot sizes — only the top-level `headshot` URL is stored |
+| `forwards[].heroImage` | Large promotional image URL — not stored |
+| `forwards[].birthCity.default` | Birth city — not stored in MVP |
+| `forwards[].birthStateProvince.default` | Birth state/province — not stored in MVP |
+| `forwards[].spokenLanguages[]` | Languages spoken — not stored |
+
+---
+
 ## Transformation Reference
 
 Status-mapping and period-mapping logic live in named helpers in `services/scores.py`

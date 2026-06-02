@@ -93,6 +93,32 @@ class Boxscore(db.Model):
         return f'<Boxscore {self.game_id} {self.away_name}@{self.home_name}>'
 
 
+class DimPlayer(db.Model):
+    """Player biographical dimension sourced from GET /v1/roster/{team}/{season}.
+
+    One row per NHL player; upserted by player_id so repeated roster pulls are
+    idempotent. sweater_number is overwritten on each upsert — it changes between
+    seasons. No FK constraints to other tables for MVP.
+    """
+    __tablename__ = 'dim_player'
+
+    player_id        = db.Column(db.Integer, primary_key=True)          # API: id — not auto-generated
+    first_name       = db.Column(db.String(64))                         # API: firstName.default
+    last_name        = db.Column(db.String(64))                         # API: lastName.default
+    sweater_number   = db.Column(db.Integer)                            # API: sweaterNumber — changes seasonally
+    position         = db.Column(db.String(2))                          # API: positionCode (C/L/R/D/G)
+    shoots_catches   = db.Column(db.String(1))                          # API: shootsCatches (L/R)
+    height_in_inches = db.Column(db.Integer)                            # API: heightInInches
+    weight_in_pounds = db.Column(db.Integer)                            # API: weightInPounds
+    birth_date       = db.Column(db.String(10))                         # API: birthDate (YYYY-MM-DD)
+    birth_country    = db.Column(db.String(3))                          # API: birthCountry (3-letter code)
+    headshot_url     = db.Column(db.String(255))                        # API: headshot (CDN URL)
+    updated_at       = db.Column(db.DateTime)                           # Eastern timestamp of last upsert
+
+    def __repr__(self):
+        return f'<DimPlayer {self.player_id} {self.first_name} {self.last_name}>'
+
+
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 

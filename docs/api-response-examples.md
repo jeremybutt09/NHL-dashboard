@@ -292,6 +292,61 @@ Returns the full historical game set. Consumed by `get_all_games()` in
 
 ---
 
+## NHL Web API — `GET /v1/roster/{team}/{season}`
+
+**Base URL:** `https://api-web.nhle.com/v1`
+
+Returns the full roster for one team and one season. Consumed by the backfill notebook
+(Issue #165) to populate `dim_player`. Players are grouped into three arrays —
+`forwards`, `defensemen`, and `goalies` — each element sharing the same per-player
+object shape.
+
+### Response shape (abbreviated)
+
+```json
+{
+  "forwards": [
+    {
+      "id": 8478402,
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/EDM/8478402.png",
+      "firstName": { "default": "Connor" },
+      "lastName": { "default": "McDavid" },
+      "sweaterNumber": 97,
+      "positionCode": "C",
+      "shootsCatches": "L",
+      "heightInInches": 73,
+      "weightInPounds": 193,
+      "heightInCentimeters": 185,
+      "weightInKilograms": 88,
+      "birthDate": "1997-01-13",
+      "birthCity": { "default": "Richmond Hill" },
+      "birthCountry": "CAN",
+      "birthStateProvince": { "default": "Ontario" }
+    }
+  ],
+  "defensemen": [ ... ],
+  "goalies": [ ... ]
+}
+```
+
+### Per-player object → `dim_player` column mapping
+
+| API field | `dim_player` column | Notes |
+|---|---|---|
+| `id` | `player_id` | Integer PK — not auto-generated |
+| `firstName.default` | `first_name` | English default only |
+| `lastName.default` | `last_name` | English default only |
+| `sweaterNumber` | `sweater_number` | Overwritten on upsert |
+| `positionCode` | `position` | `C` / `L` / `R` / `D` / `G` |
+| `shootsCatches` | `shoots_catches` | `L` or `R` |
+| `heightInInches` | `height_in_inches` | Integer |
+| `weightInPounds` | `weight_in_pounds` | Integer |
+| `birthDate` | `birth_date` | `YYYY-MM-DD` string |
+| `birthCountry` | `birth_country` | ISO 3-letter code |
+| `headshot` | `headshot_url` | CDN URL |
+
+---
+
 ## Error Responses
 
 All error responses return JSON with a consistent shape and never return

@@ -275,6 +275,37 @@ game; only today's games are written. Populated by `refresh_dashboard_games()` o
 
 ---
 
+### `dim_player`
+
+Player biographical dimension sourced from `GET /v1/roster/{team}/{season}`. One row per NHL
+player; upserted by `player_id` so repeated roster pulls are idempotent. `sweater_number`
+is overwritten on each upsert because it changes between seasons. No FK constraints to other
+tables for MVP — `player_id` values correspond to those in `boxscore_skater_stats` /
+`boxscore_goalie_stats` by convention, not enforced.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `player_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | `id` | NHL player ID — not auto-generated |
+| `first_name` | `String(64)` | `VARCHAR(64)` | — | `firstName.default` | Player's first name |
+| `last_name` | `String(64)` | `VARCHAR(64)` | — | `lastName.default` | Player's last name |
+| `sweater_number` | `Integer` | `INTEGER` | — | `sweaterNumber` | Jersey number — overwritten on each upsert, changes between seasons |
+| `position` | `String(2)` | `VARCHAR(2)` | — | `positionCode` | Position code: `C`, `L`, `R`, `D`, or `G` |
+| `shoots_catches` | `String(1)` | `VARCHAR(1)` | — | `shootsCatches` | Shot/catch hand: `L` or `R` |
+| `height_in_inches` | `Integer` | `INTEGER` | — | `heightInInches` | Player height in inches |
+| `weight_in_pounds` | `Integer` | `INTEGER` | — | `weightInPounds` | Player weight in pounds |
+| `birth_date` | `String(10)` | `VARCHAR(10)` | — | `birthDate` | Date of birth in `YYYY-MM-DD` format |
+| `birth_country` | `String(3)` | `VARCHAR(3)` | — | `birthCountry` | ISO 3-letter country code (e.g. `CAN`, `USA`) |
+| `headshot_url` | `String(255)` | `VARCHAR(255)` | — | `headshot` | CDN URL for the player's headshot image |
+| `updated_at` | `DateTime` | `DATETIME` | — | — | Eastern timestamp of last upsert |
+
+**Upsert strategy:** `db.session.merge()` on `player_id` PK — idempotent; overwrites all fields on repeated runs.
+
+**Indices:** Primary key index on `player_id`.
+
+**Source endpoint:** `GET https://api-web.nhle.com/v1/roster/{team}/{season}` — called per team per season. The backfill notebook (Issue #165) iterates all 32 team tricodes.
+
+---
+
 ## Entity-Relationship Summary
 
 ```
@@ -293,6 +324,8 @@ game (game_id PK)   ← standalone historical; no FK to live_game or team
   boxscore (game_id PK)   ← standalone; no FK to live_game or game
   ↓ derived from
   dashboard_game (game_id PK)   ← standalone; no FK to other tables
+
+dim_player (player_id PK)   ← standalone biographical dimension; no FK constraints for MVP
 ```
 
 - `live_game` references `team` **twice** (home and away via `tri_code`).
