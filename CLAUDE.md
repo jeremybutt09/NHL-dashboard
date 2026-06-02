@@ -15,7 +15,7 @@ Before making any changes, read:
 - **NHL data**: `/v1/schedule/now` (today's slate) and `/v1/score/now` (live scores + partner odds) via `nhl_client.py`.
 - **Odds data**: all moneyline/puckline/total odds come exclusively from **the-odds-api** via `odds_client.py`.
 - **Active API endpoints**: `GET /api/health`, `GET /api/games/today`, `GET /api/games/<game_id>`.
-- **Background jobs** (APScheduler): `refresh_schedule`, `refresh_slate`, `refresh_scores`, `refresh_odds`, `prune_nhl_odds_lines`, `ingest_historical_games`, `refresh_recent_historical_games`.
+- **Background jobs** (APScheduler): `refresh_schedule`, `refresh_scores`, `refresh_odds`, `prune_nhl_odds_lines`, `ingest_historical_games`, `refresh_recent_historical_games`.
 - **Quality gate**: `./init.sh` — installs deps and runs `pytest tests/`.
 - **New sessions**: read `session-handoff.md` → `feature_list.json` → `RESUME-GUIDE.md`.
 

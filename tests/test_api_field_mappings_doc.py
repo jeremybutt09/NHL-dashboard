@@ -35,28 +35,6 @@ def test_team_table_mappings_present():
     assert "team.name" in text, "team.name mapping missing"
 
 
-def test_game_table_mappings_present():
-    """live_game table column mappings must be documented (the live-score table)."""
-    text = _doc_text()
-    for col in ("live_game.game_id", "live_game.start_est", "live_game.venue",
-                "live_game.away_code", "live_game.home_code", "live_game.status"):
-        assert col in text, f"{col} mapping missing from api-field-mappings.md"
-
-
-def test_live_update_fields_present():
-    """Live-update fields (period, clock, scores, sog) must be documented for live_game."""
-    text = _doc_text()
-    for col in ("live_game.period", "live_game.clock", "live_game.away_score",
-                "live_game.home_score", "live_game.away_sog", "live_game.home_sog"):
-        assert col in text, f"{col} live-update mapping missing from api-field-mappings.md"
-
-
-def test_live_game_table_documented():
-    """live_game table must appear in the api-field-mappings doc."""
-    text = _doc_text()
-    assert "live_game" in text, "live_game table not documented in api-field-mappings.md"
-
-
 def test_boxscore_table_field_mappings_present():
     """boxscore table field mappings must be documented (Issue #133)."""
     text = _doc_text()
@@ -73,11 +51,8 @@ def test_no_nhl_historical_game_field_mapping_reference():
 def test_transformations_documented():
     """Status and period mapping logic locations must be documented."""
     text = _doc_text()
-    # Status mapping is inline in refresh_slate() and _update_from_boxscore() — no named helper
-    assert "refresh_slate" in text or "slate.py" in text, \
-        "Status-mapping location (refresh_slate/slate.py) not documented"
-    assert "_update_from_boxscore" in text or "live.py" in text, \
-        "Period-mapping location (_update_from_boxscore/live.py) not documented"
+    assert "scores.py" in text or "boxscore.py" in text or "slate.py" in text, \
+        "Status/period mapping location not documented"
 
 
 def test_odds_client_stub_documented():
@@ -86,13 +61,6 @@ def test_odds_client_stub_documented():
     assert "odds_client" in text.lower(), "odds_client stub not documented"
     assert "stub" in text.lower() or "fixture" in text.lower(), \
         "odds_client fixture status not noted"
-
-
-def test_odds_snapshot_columns_documented():
-    """odds_snapshot table columns must appear in the doc."""
-    text = _doc_text()
-    for col in ("away_ml", "home_ml", "away_implied", "home_implied"):
-        assert col in text, f"odds_snapshot.{col} mapping missing"
 
 
 def test_unused_fields_noted():
@@ -111,10 +79,11 @@ def test_score_now_is_primary_score_endpoint():
     assert "/v1/score/now" in text, "/v1/score/now not documented as score endpoint"
 
 
-def test_refresh_scores_documented():
-    """refresh_scores() must be documented as the consumer of /v1/score/now."""
+def test_refresh_nhl_odds_documented():
+    """refresh_nhl_odds() must be documented as the consumer of /v1/score/now partner odds."""
     text = _doc_text()
-    assert "refresh_scores" in text, "refresh_scores() not documented"
+    assert "refresh_nhl_odds" in text or "nhl_odds" in text.lower(), \
+        "refresh_nhl_odds() not documented"
 
 
 def test_scores_service_path_documented():
@@ -123,12 +92,10 @@ def test_scores_service_path_documented():
     assert "scores.py" in text, "services/scores.py not documented"
 
 
-def test_score_now_all_written_columns_documented():
-    """/v1/score/now field-mapping table must cover all live_game columns refresh_scores() writes."""
+def test_score_now_odds_columns_documented():
+    """/v1/score/now field-mapping table must cover nhl_odds_line columns."""
     text = _doc_text()
-    for col in ("live_game.status", "live_game.period", "live_game.clock",
-                "live_game.away_score", "live_game.home_score",
-                "live_game.away_sog", "live_game.home_sog"):
+    for col in ("nhl_odds_line", "away_value", "home_value"):
         assert col in text, f"{col} missing from /v1/score/now field-mapping table"
 
 

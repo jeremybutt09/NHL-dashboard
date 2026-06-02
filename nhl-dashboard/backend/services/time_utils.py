@@ -36,16 +36,12 @@ def migrate_timestamps_to_et() -> dict:
         Dict mapping each table name to the number of rows updated.
     """
     from extensions import db
-    from models import NhlOddsLine, OddsSnapshot, LiveGame, ModelFair, Boxscore, DashboardGame
+    from models import NhlOddsLine, Boxscore
     from sqlalchemy import select
 
     columns = [
         (NhlOddsLine,    "fetched_at"),
-        (OddsSnapshot,   "fetched_at"),
-        (LiveGame,       "updated_at"),
-        (ModelFair,      "computed_at"),
         (Boxscore,       "updated_at"),
-        (DashboardGame,  "updated_at"),
     ]
 
     results = {}

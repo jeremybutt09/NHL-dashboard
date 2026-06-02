@@ -1,6 +1,6 @@
 """Tests for GET /api/partners endpoint (Issue #137)."""
 import pytest
-from models import NhlOddsPartner, NhlOddsLine, LiveGame
+from models import NhlOddsPartner, NhlOddsLine
 from datetime import datetime, timezone
 
 
@@ -56,10 +56,8 @@ class TestGamesTodayWithPartnerId:
     """Scenario: GET /api/games/today?partner_id=X returns partner-specific odds from nhl_odds_line."""
 
     @pytest.fixture(autouse=True)
-    def seed_db(self, db, team_factory, game_factory):
-        team_factory('TOR', 'Toronto Maple Leafs')
-        team_factory('BOS', 'Boston Bruins')
-        self.game = game_factory('TOR', 'BOS', status='scheduled')
+    def seed_db(self, db, boxscore_factory):
+        self.game = boxscore_factory('TOR', 'BOS', game_state='FUT')
 
         db.session.add(NhlOddsPartner(partner_id=7, name='FanDuel'))
         db.session.add(NhlOddsPartner(partner_id=9, name='DraftKings'))
@@ -88,24 +86,10 @@ class TestGamesTodayWithPartnerId:
         game = client.get('/api/games/today?partner_id=9').get_json()['games'][0]
         assert game['ml'] is None
 
-    def test_games_today_without_partner_id_uses_odds_snapshot(self, client, db):
-        """Omitting partner_id falls back to OddsSnapshot consensus behaviour."""
-        from models import OddsSnapshot
-        db.session.add(OddsSnapshot(
-            game_id=self.game.game_id,
-            fetched_at=datetime(2026, 5, 26, 15, 0, 0),
-            book='consensus',
-            away_ml=-110,
-            home_ml=100,
-            away_implied=52.38,
-            home_implied=50.0,
-        ))
-        db.session.commit()
-
+    def test_games_today_without_partner_id_ml_is_null(self, client):
+        """Omitting partner_id returns null ml — no consensus odds source exists."""
         game = client.get('/api/games/today').get_json()['games'][0]
-        assert game['ml'] is not None
-        assert game['ml']['away'] == -110
-        assert game['ml']['home'] == 100
+        assert game['ml'] is None
 
     def test_games_today_with_partner_id_latest_row_used(self, client, db):
         """When multiple NhlOddsLine rows exist for the same game/partner, the most recent is used."""

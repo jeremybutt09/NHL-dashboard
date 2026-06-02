@@ -24,34 +24,16 @@ def _read(path):
 
 # ── data-pipeline.md ─────────────────────────────────────────────────────────
 
-def test_data_pipeline_refresh_slate_function_name():
-    """data-pipeline.md must reference refresh_slate(), not build_slate()."""
-    assert "refresh_slate" in _read(_PIPELINE), \
-        "refresh_slate() not found in data-pipeline.md"
-
-
 def test_data_pipeline_no_build_slate():
     """data-pipeline.md must not reference the obsolete build_slate() name."""
     assert "build_slate" not in _read(_PIPELINE), \
         "Obsolete build_slate() name still present in data-pipeline.md"
 
 
-def test_data_pipeline_refresh_live_function_name():
-    """data-pipeline.md must reference refresh_live(), not update_live_scores()."""
-    assert "refresh_live" in _read(_PIPELINE), \
-        "refresh_live() not found in data-pipeline.md"
-
-
 def test_data_pipeline_no_update_live_scores():
     """data-pipeline.md must not reference the obsolete update_live_scores() name."""
     assert "update_live_scores" not in _read(_PIPELINE), \
         "Obsolete update_live_scores() still present in data-pipeline.md"
-
-
-def test_data_pipeline_prune_old_snapshots_referenced():
-    """data-pipeline.md must reference prune_old_snapshots() from services/slate.py."""
-    assert "prune_old_snapshots" in _read(_PIPELINE), \
-        "prune_old_snapshots() not documented in data-pipeline.md"
 
 
 def test_data_pipeline_start_scheduler_referenced():
@@ -64,20 +46,6 @@ def test_data_pipeline_no_init_scheduler():
     """data-pipeline.md must not reference the obsolete init_scheduler() name."""
     assert "init_scheduler" not in _read(_PIPELINE), \
         "Obsolete init_scheduler() still present in data-pipeline.md"
-
-
-def test_data_pipeline_prune_job_id_is_prune():
-    """APScheduler job ID for the prune job is 'prune', not 'prune_snapshots'."""
-    text = _read(_PIPELINE)
-    # Job ID column in the scheduler table must show the actual id used in add_job()
-    assert "| `prune`" in text or '| prune |' in text or "'prune'" in text, \
-        "Actual prune job ID ('prune') not documented in data-pipeline.md"
-
-
-def test_data_pipeline_poll_odds_delegates_to_refresh_odds():
-    """data-pipeline.md must document that _poll_odds() delegates to refresh_odds()."""
-    assert "refresh_odds" in _read(_PIPELINE), \
-        "_poll_odds() → refresh_odds() delegation not documented in data-pipeline.md"
 
 
 # ── api-field-mappings.md ────────────────────────────────────────────────────
@@ -117,19 +85,11 @@ def test_api_mappings_cache_keyed_by_url_path():
         "Wrong 'keyed by game_id' cache description still in api-field-mappings.md"
 
 
-def test_api_mappings_upsert_uses_session_get():
-    """Upsert pattern is db.session.get() + add(), not db.session.merge()."""
+def test_api_mappings_upsert_documented():
+    """Upsert strategy must be mentioned in the field mappings doc."""
     text = _read(_MAPPINGS)
-    assert "session.get" in text or "db.session.get" in text, \
-        "db.session.get() upsert pattern not documented in api-field-mappings.md"
-
-
-def test_api_mappings_upsert_uses_session_get_for_live_game():
-    """live_game upsert uses db.session.get() + add(), not db.session.merge()."""
-    text = _read(_MAPPINGS)
-    # The schedule upsert pattern is session.get() + add(), not merge()
-    assert "session.get" in text or "db.session.get" in text, \
-        "db.session.get() upsert pattern not documented in api-field-mappings.md"
+    assert "upsert" in text.lower() or "session.merge" in text or "session.get" in text, \
+        "Upsert strategy not documented in api-field-mappings.md"
 
 
 def test_api_mappings_fetch_odds_function_name():
@@ -143,13 +103,6 @@ def test_api_mappings_fetch_odds_takes_list():
     text = _read(_MAPPINGS)
     assert "game_ids" in text or "list[int]" in text, \
         "fetch_odds(game_ids: list[int]) signature not in api-field-mappings.md"
-
-
-def test_api_mappings_status_mapping_inline_in_refresh_slate():
-    """Status-mapping logic is inline in refresh_slate(); doc must reflect actual location."""
-    text = _read(_MAPPINGS)
-    assert "refresh_slate" in text or "slate.py" in text, \
-        "Inline status-mapping location (refresh_slate/slate.py) missing from api-field-mappings.md"
 
 
 def test_api_mappings_period_mapping_inline_in_live():
@@ -182,13 +135,6 @@ def test_odds_data_mock_constant_name():
         "_MOCK constant not documented in odds-data.md"
 
 
-def test_odds_data_return_shape_has_away_ml_open():
-    """fetch_odds() return shape includes away_ml_open and home_ml_open columns."""
-    text = _read(_ODDS)
-    assert "away_ml_open" in text and "home_ml_open" in text, \
-        "away_ml_open/home_ml_open not documented in fetch_odds return shape in odds-data.md"
-
-
 def test_odds_data_fetch_odds_returns_list():
     """fetch_odds() returns list[dict], doc must reflect the list return type."""
     text = _read(_ODDS)
@@ -216,33 +162,11 @@ def test_testing_guide_status_example_lowercase():
 
 # ── database-schema.md + models.py ───────────────────────────────────────────
 
-def test_models_game_start_est_nullable_false():
-    """game.start_est is NOT NULL; models.py must enforce nullable=False."""
-    text = _read(_MODELS)
-    assert "start_est" in text and "nullable=False" in text, \
-        "game.start_est missing nullable=False in models.py"
-
-
-def test_models_game_status_nullable_false():
-    """game.status is documented as NOT NULL; models.py must enforce nullable=False."""
-    import re
-    text = _read(_MODELS)
-    # Find the Game model section and check the status line
-    match = re.search(r'status\s*=\s*db\.Column\(.*?nullable=False', text)
-    assert match, "game.status missing nullable=False in models.py"
-
-
-def test_models_odds_snapshot_fetched_at_nullable_false():
-    """odds_snapshot.fetched_at is documented as NOT NULL; models.py must enforce it."""
+def test_models_nhl_odds_line_fetched_at_nullable_false():
+    """nhl_odds_line.fetched_at is NOT NULL; models.py must enforce nullable=False."""
     import re
     text = _read(_MODELS)
     match = re.search(r'fetched_at\s*=\s*db\.Column\(.*?nullable=False', text)
-    assert match, "odds_snapshot.fetched_at missing nullable=False in models.py"
+    assert match, "nhl_odds_line.fetched_at missing nullable=False in models.py"
 
 
-def test_models_odds_snapshot_book_nullable_false():
-    """odds_snapshot.book is documented as NOT NULL; models.py must enforce it."""
-    import re
-    text = _read(_MODELS)
-    match = re.search(r'book\s*=\s*db\.Column\(.*?nullable=False', text)
-    assert match, "odds_snapshot.book missing nullable=False in models.py"

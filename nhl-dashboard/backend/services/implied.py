@@ -8,10 +8,6 @@ All values are in **percentage points (0–100)**, not fractions.
 
 All functions accept raw American odds integers (+120, -140, etc.).
 """
-from datetime import datetime, timezone
-from extensions import db
-from models import LiveGame, OddsSnapshot, ModelFair
-from services.time_utils import now_et
 
 
 def american_to_implied(odds: int) -> float:
@@ -61,39 +57,3 @@ def edge(fair_pct: float, market_pct: float) -> float:
         Signed difference in percentage points.
     """
     return fair_pct - market_pct
-
-
-def compute_all_fair():
-    """
-    For each game with an OddsSnapshot, upsert a ModelFair row.
-    v1: fair = de-vigged market implied (no proprietary model adjustment).
-    """
-    from sqlalchemy import select
-
-    today_games = db.session.scalars(
-        select(LiveGame).where(LiveGame.status.in_(['scheduled', 'live']))
-    ).all()
-
-    now = now_et()
-    for g in today_games:
-        snap = db.session.scalars(
-            select(OddsSnapshot)
-            .where(OddsSnapshot.game_id == g.game_id)
-            .order_by(OddsSnapshot.fetched_at.desc())
-        ).first()
-        if not snap:
-            continue
-
-        raw_away = american_to_implied(snap.away_ml)
-        raw_home = american_to_implied(snap.home_ml)
-        fair_away, fair_home = devig_two_way(raw_away, raw_home)
-
-        mf = db.session.get(ModelFair, g.game_id)
-        if mf is None:
-            mf = ModelFair(game_id=g.game_id)
-            db.session.add(mf)
-        mf.away_fair = fair_away
-        mf.home_fair = fair_home
-        mf.computed_at = now
-
-    db.session.commit()

@@ -11,13 +11,7 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
     # Poll intervals (seconds)
-    POLL_SCHEDULE_INTERVAL = int(os.environ.get('POLL_SCHEDULE_INTERVAL', 300))  # 5 min
-    POLL_SLATE_INTERVAL  = int(os.environ.get('POLL_SLATE_INTERVAL',  300))   # 5 min (legacy alias)
-    POLL_LIVE_INTERVAL   = int(os.environ.get('POLL_LIVE_INTERVAL',   15))    # 15 sec (deprecated)
-    POLL_SCORE_INTERVAL  = int(os.environ.get('POLL_SCORE_INTERVAL',  30))    # 30 sec
-    POLL_ODDS_INTERVAL   = int(os.environ.get('POLL_ODDS_INTERVAL',   300))   # 5 min
-    COMPUTE_FAIR_INTERVAL = int(os.environ.get('COMPUTE_FAIR_INTERVAL', 300)) # 5 min
-    PRUNE_INTERVAL          = int(os.environ.get('PRUNE_INTERVAL',          3600))  # 1 hr
-    POLL_BOXSCORE_INTERVAL  = int(os.environ.get('POLL_BOXSCORE_INTERVAL',  60))    # 60 sec
+    POLL_SCORE_INTERVAL     = int(os.environ.get('POLL_SCORE_INTERVAL',     30))   # 30 sec
+    POLL_BOXSCORE_INTERVAL  = int(os.environ.get('POLL_BOXSCORE_INTERVAL',  60))   # 60 sec
 
     SCHEDULER_API_ENABLED = False

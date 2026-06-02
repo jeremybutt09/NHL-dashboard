@@ -7,8 +7,7 @@ by the API that are **not** consumed by the current implementation are listed in
 
 Source files:
 - `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_score_now()`, `get_boxscore()` (module-level functions, no class)
-- `nhl-dashboard/backend/services/slate.py` — `refresh_schedule()`
-- `nhl-dashboard/backend/services/scores.py` — `refresh_scores()` (primary score + live-update pipeline)
+- `nhl-dashboard/backend/services/scores.py` — `refresh_nhl_odds()` (partner odds pipeline via `/v1/score/now`)
 - `nhl-dashboard/backend/services/boxscore.py` — `refresh_boxscores()`, `backfill_boxscores()`
 - `nhl-dashboard/backend/odds_client.py` — deterministic fixture stub
 
@@ -18,47 +17,18 @@ Source files:
 
 **Base URL:** `https://api-web.nhle.com/v1`
 
-Polled by `get_schedule_now()` on the slate poll interval
-(`Config.POLL_SCHEDULE_INTERVAL`). The raw JSON is parsed by `refresh_schedule()` in
-`services/slate.py`, which filters to the `gameWeek` block whose `date` matches
-today's UTC date before yielding rows. The normalized list is then persisted using
-`db.session.get()` + `db.session.add()` (upsert by primary key).
+Polled by `get_schedule_now()`. Inline odds from the schedule payload are captured as `OddsSnapshot` rows via `refresh_odds()` in `services/slate.py`. This endpoint is no longer used to seed game rows.
 
 ### → `team` table
 
-One `Team` row is upserted per unique team abbreviation found in today's games
-(both away and home).
+One `Team` row is upserted per unique team abbreviation found in today's games (both away and home) when a new team is encountered.
 
 | API JSON path | `team` column | Transform |
 |---|---|---|
-| `gameWeek[].games[].awayTeam.abbrev` | `team.tri_code` | None — 3-letter abbreviation used as primary key; existing row is updated, not duplicated |
-| `gameWeek[].games[].awayTeam.placeName.default` + `commonName.default` | `team.name` | Concatenated to form full name (e.g. `Toronto Maple Leafs`); falls back to abbreviation |
-| `gameWeek[].games[].homeTeam.abbrev` | `team.tri_code` | None — same upsert logic as away team |
+| `gameWeek[].games[].awayTeam.abbrev` | `team.tri_code` | None — 3-letter abbreviation used as primary key |
+| `gameWeek[].games[].awayTeam.placeName.default` + `commonName.default` | `team.name` | Concatenated to form full name |
+| `gameWeek[].games[].homeTeam.abbrev` | `team.tri_code` | Same as above |
 | `gameWeek[].games[].homeTeam.placeName.default` + `commonName.default` | `team.name` | Same as above |
-
-### → `live_game` table
-
-One `LiveGame` row is upserted per game in today's slate.
-
-| API JSON path | `live_game` column | Transform |
-|---|---|---|
-| `gameWeek[].games[].id` | `live_game.game_id` | None — integer game ID used as primary key |
-| `gameWeek[].games[].startTimeUTC` | `live_game.start_est` | ISO 8601 string parsed via `datetime.fromisoformat()`, then converted to `US/Eastern` via `zoneinfo`; stored as Eastern `DATETIME` |
-| `gameWeek[].games[].gameDate` | `live_game.game_date` | Stored verbatim as a `VARCHAR(10)` string (e.g. `"2025-01-15"`) — not derived from `start_est` |
-| `gameWeek[].games[].venue.default` | `live_game.venue` | None |
-| `gameWeek[].games[].awayTeam.abbrev` | `live_game.away_code` | None — FK → `team.tri_code` |
-| `gameWeek[].games[].homeTeam.abbrev` | `live_game.home_code` | None — FK → `team.tri_code` |
-| `gameWeek[].games[].gameState` | `live_game.status` | Inline in `refresh_schedule()`: `{"LIVE","CRIT"}` → `"live"`, `{"FINAL","OFF"}` → `"final"`, anything else → `"scheduled"` |
-
-**Columns set by `refresh_schedule()` directly (not from API):**
-
-| Column | Value |
-|---|---|
-| `live_game.updated_at` | `now_et()` (Eastern timezone-aware datetime) at the time of the call |
-
-**Columns NOT written by `refresh_schedule()` (left at default / populated by score poller):**
-
-`live_game.period`, `live_game.clock`, `live_game.away_sog`, `live_game.home_sog`, `live_game.away_score`, `live_game.home_score`
 
 ### Ignored / unused fields from `/v1/schedule/now`
 
@@ -83,32 +53,36 @@ current implementation:
 **Base URL:** `https://api-web.nhle.com/v1`
 
 Polled by `get_score_now()` on the score poll interval (`Config.POLL_SCORE_INTERVAL`).
-Responses are cached in a 128-slot `TTLCache` with a 5-minute TTL. `refresh_scores()`
-in `services/scores.py` makes a **single call** that covers all of today's games
-regardless of status — eliminating the N+1 boxscore-per-live-game pattern and the
-bootstrap gap where newly-started games were missed before the slate poller ran.
+Responses are cached in a 128-slot `TTLCache` with a 5-minute TTL. `refresh_nhl_odds()`
+in `services/scores.py` makes a **single call** that covers all of today's games,
+upserts the partner registry, and inserts odds lines for each game.
 
-### → `live_game` table (status + live updates)
+### → `nhl_odds_partner` table
 
-| API JSON path | `live_game` column | Transform |
+One row upserted per entry in the `oddsPartners` array.
+
+| API JSON path | `nhl_odds_partner` column | Transform |
 |---|---|---|
-| `games[].gameState` | `live_game.status` | `_map_game_state()` (`services/scores.py`): `{"FINAL","OFF"}` → `"final"`, `{"LIVE","CRIT"}` → `"live"`, else → `"scheduled"` |
-| `games[].periodDescriptor` | `live_game.period` | `_parse_period()` (`services/scores.py`): `periodType == "OT"` → `"OT"`, `"SO"` → `"SO"`, `"REG"` uses ordinal dict `{1:"1st", 2:"2nd", 3:"3rd"}`; unknown numbers fall back to `f'{n}th'` |
-| `games[].clock.timeRemaining` | `live_game.clock` | None — stored as-is (e.g. `"12:34"`) |
-| `games[].awayTeam.score` | `live_game.away_score` | Falls back to current DB value if key absent |
-| `games[].homeTeam.score` | `live_game.home_score` | Falls back to current DB value if key absent |
-| `games[].awayTeam.sog` | `live_game.away_sog` | Falls back to current DB value if key absent |
-| `games[].homeTeam.sog` | `live_game.home_sog` | Falls back to current DB value if key absent |
+| `oddsPartners[].partnerId` | `nhl_odds_partner.partner_id` | None — integer PK |
+| `oddsPartners[].name` | `nhl_odds_partner.name` | None |
+| `oddsPartners[].country` | `nhl_odds_partner.country` | None |
+| `oddsPartners[].imageUrl` | `nhl_odds_partner.image_url` | None |
+| `oddsPartners[].siteUrl` | `nhl_odds_partner.site_url` | None |
 
-**Columns set by `refresh_scores()` directly (not from API):**
+### → `nhl_odds_line` table
 
-| Column | Value |
-|---|---|
-| `live_game.updated_at` | `now_et()` (Eastern timezone-aware datetime) at the time of the call |
+One row inserted per (game, partner) pair per poll cycle, subject to 3-minute cooldown.
+
+| API JSON path | `nhl_odds_line` column | Transform |
+|---|---|---|
+| `games[].id` | `nhl_odds_line.game_id` | None — integer game ID |
+| `games[].awayTeam.odds[].providerId` | `nhl_odds_line.partner_id` | Paired with matching home providerId; unknown partnerIds skipped |
+| `games[].awayTeam.odds[].value` | `nhl_odds_line.away_value` | Stored verbatim as string (e.g. `"-152"`, `"1.67"`) |
+| `games[].homeTeam.odds[].value` | `nhl_odds_line.home_value` | Stored verbatim as string |
 
 ### Ignored / unused fields from `/v1/score/now`
 
-The following fields are present in the API response but are not consumed by `refresh_scores()`:
+The following fields are present in the API response but are not consumed by `refresh_nhl_odds()`:
 
 | API JSON path | Notes |
 |---|---|
@@ -186,7 +160,7 @@ following keys from each `fetch_odds()` dict are written to `odds_snapshot`:
 
 | Return key | `odds_snapshot` column | Type | Notes |
 |---|---|---|---|
-| `game_id` | `odds_snapshot.game_id` | `Integer` | FK to `live_game.game_id` |
+| `game_id` | `odds_snapshot.game_id` | `Integer` | NHL game ID (no FK constraint) |
 | `book` | `odds_snapshot.book` | `String(32)` | Always `'consensus'` in stub |
 | `away_ml` | `odds_snapshot.away_ml` | `Integer` | American-format money line for the away team (e.g. `+120` stored as `120`) |
 | `home_ml` | `odds_snapshot.home_ml` | `Integer` | American-format money line for the home team (e.g. `-140` stored as `-140`) |
@@ -249,5 +223,5 @@ and also inline in the older `services/slate.py` and `services/live.py`:
 | Game state → status string | Inline in `_update_from_boxscore()` (`services/live.py`) | Same mapping; applied to boxscore `gameState` (legacy) |
 | `periodDescriptor` → period label | `_parse_period()` (`services/scores.py`) | `"OT"` / `"SO"` / `"1st"` / `"2nd"` / `"3rd"` / `f'{n}th'` |
 | `periodDescriptor` → period label | `_parse_period()` (`services/boxscore.py`) | Same logic; used by boxscore ingest |
-| `periodDescriptor` → period label | Inline in `_update_from_boxscore()` (`services/live.py`) | Same logic (legacy) |
+| `gameState` → status string | Inline in `_build_from_boxscores()` (`services/slate.py`) | `{"LIVE","CRIT"}` → `"live"`, `{"FINAL","OFF"}` → `"final"`, else → `"scheduled"` |
 | `startTimeUTC` → Eastern datetime | `_build_boxscore()` (`services/boxscore.py`) | UTC ISO 8601 → `US/Eastern` datetime via `zoneinfo` |

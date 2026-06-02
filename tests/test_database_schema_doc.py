@@ -16,30 +16,17 @@ def test_database_schema_doc_exists():
     assert os.path.isfile(SCHEMA_DOC), "docs/database-schema.md not found"
 
 
-def test_all_four_tables_have_sections():
+def test_current_tables_have_sections():
     """All current tables must have their own section headings."""
     text = _doc_text()
-    for table in ("team", "live_game", "game", "odds_snapshot", "model_fair",
-                  "nhl_odds_partner", "nhl_odds_line", "boxscore", "dashboard_game"):
+    for table in ("team", "game", "nhl_odds_partner", "nhl_odds_line", "boxscore"):
         assert table in text.lower(), f"Table '{table}' section missing from schema doc"
-
-
-def test_live_game_table_has_section():
-    """live_game table (the live-score table, renamed from legacy game) must be documented."""
-    text = _doc_text()
-    assert "live_game" in text, "live_game table section missing from database-schema.md"
 
 
 def test_boxscore_table_has_section():
     """boxscore table (Issue #133) must have its own section."""
     text = _doc_text()
     assert "boxscore" in text.lower(), "boxscore table section missing from database-schema.md"
-
-
-def test_dashboard_game_table_has_section():
-    """dashboard_game table (Issue #134) must have its own section."""
-    text = _doc_text()
-    assert "dashboard_game" in text.lower(), "dashboard_game table section missing from database-schema.md"
 
 
 def test_no_nhl_historical_game_reference():

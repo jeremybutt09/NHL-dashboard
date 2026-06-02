@@ -134,21 +134,12 @@ def test_notebook_has_section_3_game():
     )
 
 
-def test_notebook_has_section_4_odds_snapshot():
-    """Notebook must include a Section 4 covering odds_snapshot."""
+def test_notebook_has_section_4_nhl_odds():
+    """Notebook must include a section covering nhl_odds_line or nhl_odds_partner."""
     nb = _load_notebook()
     full_text = _all_cell_sources(nb)
-    assert "Section 4" in full_text or "odds_snapshot" in full_text, (
-        "Section 4 (odds_snapshot) not found in notebook"
-    )
-
-
-def test_notebook_has_section_5_model_fair():
-    """Notebook must include a Section 5 covering model_fair."""
-    nb = _load_notebook()
-    full_text = _all_cell_sources(nb)
-    assert "Section 5" in full_text or "model_fair" in full_text, (
-        "Section 5 (model_fair) not found in notebook"
+    assert "nhl_odds_line" in full_text or "nhl_odds_partner" in full_text, (
+        "nhl_odds_line/nhl_odds_partner section not found in notebook"
     )
 
 
@@ -413,7 +404,7 @@ def test_section1_expected_tables_excludes_nhl_historical_game():
     # Extract the set literal — look for nhl_historical_game appearing inside EXPECTED_TABLES
     assert '"nhl_historical_game"' not in src and "'nhl_historical_game'" not in src, (
         "Section 1 EXPECTED_TABLES still contains nhl_historical_game — "
-        "replace with game, boxscore, dashboard_game (Issue #139)"
+        "replace with game, boxscore (Issue #139)"
     )
 
 
@@ -423,15 +414,6 @@ def test_section1_expected_tables_includes_boxscore():
     src = _get_section1_code_source(nb)
     assert '"boxscore"' in src or "'boxscore'" in src, (
         "Section 1 EXPECTED_TABLES must include boxscore (Issue #139)"
-    )
-
-
-def test_section1_expected_tables_includes_dashboard_game():
-    """Section 1 EXPECTED_TABLES must include dashboard_game (Issue #139)."""
-    nb = _load_notebook()
-    src = _get_section1_code_source(nb)
-    assert '"dashboard_game"' in src or "'dashboard_game'" in src, (
-        "Section 1 EXPECTED_TABLES must include dashboard_game (Issue #139)"
     )
 
 
@@ -454,15 +436,6 @@ def test_section6_expected_tables_includes_boxscore():
     )
 
 
-def test_section6_expected_tables_includes_dashboard_game():
-    """Section 6 EXPECTED_TABLES must include dashboard_game (Issue #139)."""
-    nb = _load_notebook()
-    src = _get_section6_code_source(nb)
-    assert '"dashboard_game"' in src or "'dashboard_game'" in src, (
-        "Section 6 EXPECTED_TABLES must include dashboard_game (Issue #139)"
-    )
-
-
 def test_notebook_has_boxscore_section():
     """Notebook must include a dedicated explorer section for the boxscore table (Issue #139)."""
     nb = _load_notebook()
@@ -481,19 +454,6 @@ def test_notebook_has_boxscore_section():
     )
 
 
-def test_notebook_has_dashboard_game_section():
-    """Notebook must include a dedicated explorer section for the dashboard_game table (Issue #139)."""
-    nb = _load_notebook()
-    for cell in nb.get("cells", []):
-        if cell.get("cell_type") == "markdown":
-            source = "".join(cell.get("source", []))
-            if "dashboard_game" in source.lower() and (
-                "##" in source or "Section" in source
-            ):
-                return
-    raise AssertionError(
-        "No markdown section header for dashboard_game table found in notebook (Issue #139)"
-    )
 
 
 def test_notebook_section7_queries_game_not_nhl_historical_game():

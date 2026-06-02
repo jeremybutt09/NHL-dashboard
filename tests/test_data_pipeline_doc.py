@@ -23,36 +23,23 @@ def test_data_flow_diagram_present():
     assert "api" in text.lower(), "API reference missing from data flow diagram"
 
 
-def test_all_five_jobs_documented():
+def test_active_jobs_documented():
     """Current scheduler job IDs must appear in the doc."""
     text = _doc_text()
-    for job_id in ("poll_schedule", "poll_scores", "poll_odds", "compute_fair", "prune"):
+    for job_id in ("poll_nhl_odds", "refresh_boxscores", "prune_stale_boxscores"):
         assert job_id in text, f"Job '{job_id}' missing from data pipeline doc"
 
 
 def test_refresh_boxscores_documented():
-    """refresh_boxscores job (Issue #133) must be documented in the pipeline."""
+    """refresh_boxscores job must be documented in the pipeline."""
     text = _doc_text()
     assert "refresh_boxscores" in text, "refresh_boxscores job missing from data-pipeline.md"
 
 
-def test_refresh_dashboard_games_documented():
-    """refresh_dashboard_games job (Issue #134) must be documented in the pipeline."""
-    text = _doc_text()
-    assert "refresh_dashboard_games" in text, "refresh_dashboard_games job missing from data-pipeline.md"
-
-
-def test_poll_schedule_job_documented():
-    """poll_schedule job ID (replaced poll_slate) must appear in the doc."""
-    text = _doc_text()
-    assert "poll_schedule" in text, "poll_schedule job ID missing from data-pipeline.md"
-
-
-def test_boxscore_and_dashboard_game_tables_in_pipeline():
-    """boxscore and dashboard_game tables must appear in pipeline job descriptions."""
+def test_boxscore_table_in_pipeline():
+    """boxscore table must appear in pipeline job descriptions."""
     text = _doc_text().lower()
     assert "boxscore" in text, "boxscore table not referenced in data-pipeline.md"
-    assert "dashboard_game" in text, "dashboard_game table not referenced in data-pipeline.md"
 
 
 def test_trigger_intervals_present():
@@ -62,14 +49,14 @@ def test_trigger_intervals_present():
     assert "5 min" in text or "5-minute" in text or "5 minutes" in text, \
         "5-minute interval not documented"
     assert "30 sec" in text or "30 seconds" in text or "30-second" in text, \
-        "30-second poll_scores interval not documented"
+        "30-second poll_nhl_odds interval not documented"
     assert "1 hour" in text or "hourly" in text, "Hourly interval not documented"
 
 
 def test_tables_read_and_written_documented():
     """Each job section must reference the tables it reads and writes."""
     text = _doc_text().lower()
-    for table in ("team", "game", "odds_snapshot", "model_fair"):
+    for table in ("team", "game", "nhl_odds_line"):
         assert table in text, f"Table '{table}' not referenced in data pipeline doc"
 
 

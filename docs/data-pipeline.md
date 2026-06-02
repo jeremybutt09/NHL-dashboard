@@ -7,11 +7,8 @@ This document describes all background jobs that drive data writes to the NHL Da
 ## End-to-End Data Flow
 
 ```
-NHL /v1/schedule/now
-  └──> refresh_schedule()  ──> team (upsert), live_game (upsert)
-
 NHL /v1/score/now
-  └──> refresh_scores()    ──> live_game (update live fields + status)
+  └──> refresh_nhl_odds()  ──> nhl_odds_partner (upsert), nhl_odds_line (insert)
 
 NHL /v1/gamecenter/{id}/boxscore
   └──> refresh_boxscores() ──> boxscore (upsert by game_id)
@@ -22,10 +19,6 @@ boxscore (today's rows)
 fetch_odds() [stub fixture]
   └──> refresh_odds()
          └──> _poll_odds() ──> odds_snapshot (insert-only / append)
-
-odds_snapshot (latest per game)
-  └──> compute_all_fair()
-         └──> devig_two_way() ──> model_fair (upsert)
 
 odds_snapshot
   └──> prune_old_snapshots() ──> DELETE rows WHERE fetched_at < now() − 7 days
@@ -45,12 +38,11 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 
 | Job ID | Trigger Interval | Function Called | Tables Written | Update Strategy |
 |---|---|---|---|---|
-| `poll_schedule` | Every 5 minutes | `refresh_schedule()` in `services/slate.py` | `team`, `live_game` | Upsert (`db.session.get()` + `add()`) |
-| `poll_scores` | Every 30 seconds | `refresh_scores()` in `services/scores.py` | `live_game` | Update live fields only |
+| `poll_nhl_odds` | Every 30 seconds | `refresh_nhl_odds()` in `services/scores.py` | `nhl_odds_partner`, `nhl_odds_line` | Upsert partners; insert odds lines |
 | `poll_odds` | Every 5 minutes | `refresh_odds()` in `services/slate.py` | `odds_snapshot` | Insert-only (append) |
-| `compute_fair` | Every 5 minutes | `compute_all_fair()` in `services/implied.py` | `model_fair` | Upsert |
 | `prune` | Every 1 hour | `prune_old_snapshots()` in `services/slate.py` | `odds_snapshot` | Delete (age-based purge) |
 | `refresh_boxscores` | Every 60 seconds | `refresh_boxscores()` in `services/boxscore.py` | `boxscore` | Upsert by `game_id` |
+| `prune_stale_boxscores` | Every 60 seconds | `prune_stale_boxscores()` in `services/boxscore.py` | `boxscore`, `game` | Delete stale rows |
 | `refresh_dashboard_games` | Every 60 seconds | `refresh_dashboard_games()` in `services/dashboard_game.py` | `dashboard_game` | Upsert by `game_id` |
 | `refresh_historical` | Daily at 08:00 UTC | `refresh_recent_historical_games()` in `services/historical.py` | `game` | Upsert (30-day window) |
 | *(on-demand)* | Manual / startup backfill | `ingest_historical_games()` in `services/historical.py` | `game` | Full upsert by `game_id` |
@@ -65,25 +57,15 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 
 **What it does:** Calls `GET /v1/schedule/now` on the NHL API, parses today's game list, and writes every team and game to the database. Uses `db.session.get()` to look up each row by primary key, then `db.session.add()` for new rows — equivalent to an upsert. Re-running the job never creates duplicate rows; it updates in place. Also captures inline odds from the NHL schedule payload as `OddsSnapshot` rows when present.
 
-**Tables read:** none  
-**Tables written:** `team` (upsert by `tri_code`), `live_game` (upsert by `game_id`)  
-**Update strategy:** Upsert (`db.session.get()` + `db.session.add()`) — safe to run repeatedly
+### `poll_nhl_odds` — Every 30 Seconds
 
-**Staleness signal:** If `live_game.updated_at` is more than ~6 minutes old, this job has likely stalled or the NHL API returned an error.
+**Source:** `nhl-dashboard/backend/scheduler.py` → `refresh_nhl_odds()` in `services/scores.py`
 
----
+**What it does:** Makes a single call to `GET /v1/score/now`, upserts the `oddsPartners` registry into `nhl_odds_partner`, then inserts `nhl_odds_line` rows for each game's partner odds. A 3-minute duplicate-suppression window (`_ODDS_COOLDOWN_SECONDS`) prevents duplicate rows within the same poll cycle.
 
-### `poll_scores` — Every 30 Seconds
-
-**Source:** `nhl-dashboard/backend/scheduler.py` → `refresh_scores()` in `services/scores.py`
-
-**What it does:** Makes a **single call** to `GET /v1/score/now` that covers all of today's games regardless of status — eliminating the N+1 boxscore-per-live-game pattern and the bootstrap gap where newly-started games were missed before the schedule poller ran. Writes `status`, `period`, `clock`, `away_score`, `home_score`, `away_sog`, `home_sog`, and `updated_at` to the `live_game` row for each game found in the response.
-
-**Tables read:** `live_game` (filter by `game_id` from API response)  
-**Tables written:** `live_game` (live columns only)  
-**Update strategy:** Direct field update — does not upsert or insert new rows
-
-**Staleness signal:** If scores are stale during a live game, verify the `live_game` rows exist (populated by `poll_schedule`).
+**Tables read:** `nhl_odds_line` (cooldown check per game/partner)  
+**Tables written:** `nhl_odds_partner` (upsert via `db.session.merge()`), `nhl_odds_line` (insert — `away_value`, `home_value`, `fetched_at`)  
+**Update strategy:** Partners — upsert; odds lines — insert-only with cooldown deduplication
 
 ---
 
@@ -99,21 +81,9 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 
 > **Stub state:** `odds_client.fetch_odds()` returns data from the `_MOCK` dict (deterministic fixture). See `docs/odds-data.md` for the real-API upgrade path.
 
----
+#### Devig Formula (used in API response)
 
-### `compute_fair` — Every 5 Minutes
-
-**Source:** `nhl-dashboard/backend/scheduler.py` → `compute_all_fair()` in `services/implied.py`
-
-**What it does:** For each game, fetches the most recent `OddsSnapshot` row (ordered by `fetched_at DESC`), runs the devig computation, and upserts the result into `model_fair`. Skips games with no snapshot yet.
-
-**Tables read:** `live_game`, `odds_snapshot` (latest per game)  
-**Tables written:** `model_fair` (upsert by `game_id`)  
-**Update strategy:** Upsert — creates a `ModelFair` row on first run, updates it on subsequent runs
-
-#### `model_fair` Computation — Devig Formula
-
-The raw implied probabilities stored in `odds_snapshot` (e.g. `away_implied = 52.4`, `home_implied = 50.0`) sum to more than 100 because the sportsbook embeds a vig (margin). The devig step removes the vig so the two probabilities sum to exactly 100, yielding the model's estimate of true win probability.
+The raw implied probabilities derived from `odds_snapshot` (e.g. `away_implied = 52.4`, `home_implied = 50.0`) sum to more than 100 because the sportsbook embeds a vig (margin). The devig step removes the vig so the two probabilities sum to exactly 100, yielding fair-value win probabilities.
 
 **Step 1 — Convert American odds to implied probability** (`american_to_implied` in `services/implied.py`):
 
@@ -132,10 +102,7 @@ away_fair = p_away / total × 100  # 52.4 / 102.4 × 100 ≈ 51.17
 home_fair = p_home / total × 100  # 50.0 / 102.4 × 100 ≈ 48.83
 ```
 
-The resulting `away_fair` and `home_fair` values (stored in `model_fair`) sum to 100 and represent the model's fair-value win probabilities, free of the bookmaker's vig.
-
-**Inputs:** `odds_snapshot.away_implied`, `odds_snapshot.home_implied`  
-**Outputs:** `model_fair.away_fair`, `model_fair.home_fair`, `model_fair.computed_at`
+The resulting `away_fair` and `home_fair` values sum to 100 and are returned directly in the `/api/games/today` response.
 
 ---
 
@@ -230,9 +197,8 @@ Not all jobs are equally necessary for local development. The table below indica
 | Job ID | Safe to Disable Locally? | Notes |
 |---|---|---|
 | `poll_schedule` | **No** — required for data | Must run at least once to populate `live_game` and `team` tables |
-| `poll_scores` | Yes | No-ops when no live games; disable to reduce noise |
+| `poll_nhl_odds` | Yes | Disable to avoid external API calls during local development |
 | `poll_odds` | Yes (with stub) | Stub returns fixture data; disable if you don't need odds snapshots |
-| `compute_fair` | Yes | Skips gracefully when no snapshots exist |
 | `prune` | Yes | No functional impact during short dev sessions |
 | `refresh_boxscores` | Yes | Disable if not testing boxscore/dashboard_game flows |
 | `refresh_dashboard_games` | Yes | Disable if not testing dashboard_game flow |
@@ -249,12 +215,11 @@ Alternatively, set `TESTING = True` in the app config — this skips `start_sche
 | File | Role |
 |---|---|
 | `nhl-dashboard/backend/scheduler.py` | All job definitions and registration; `start_scheduler(app)` entry point |
-| `nhl-dashboard/backend/services/slate.py` | `refresh_schedule()` — schedule fetch and upsert; `refresh_slate()` (legacy, also writes score fields); `refresh_odds()` — odds snapshot insert; `prune_old_snapshots()` — age purge |
-| `nhl-dashboard/backend/services/scores.py` | `refresh_scores()` — single-call score + live-update pipeline |
-| `nhl-dashboard/backend/services/live.py` | `refresh_live()` (legacy) — per-game boxscore update, superseded by `refresh_scores()` |
+| `nhl-dashboard/backend/services/slate.py` | `refresh_odds()` — odds snapshot insert; `prune_old_snapshots()` — age purge; `build_today_response()` — serve /api/games/today |
+| `nhl-dashboard/backend/services/scores.py` | `refresh_nhl_odds()` — poll /v1/score/now and write nhl_odds_line rows |
 | `nhl-dashboard/backend/services/boxscore.py` | `refresh_boxscores()` — live boxscore upsert; `backfill_boxscores()` — historical fill |
 | `nhl-dashboard/backend/services/dashboard_game.py` | `refresh_dashboard_games()` — derive app-ready game view from boxscore |
-| `nhl-dashboard/backend/services/implied.py` | `devig_two_way()`, `american_to_implied()`, `compute_all_fair()`, `edge()` |
+| `nhl-dashboard/backend/services/implied.py` | `devig_two_way()`, `american_to_implied()`, `edge()` — pure probability math |
 | `nhl-dashboard/backend/odds_client.py` | `fetch_odds(game_ids)` — currently a stub fixture |
 | `nhl-dashboard/backend/models.py` | SQLAlchemy models for all tables |
 | `nhl-dashboard/backend/services/historical.py` | `ingest_historical_games()` and `refresh_recent_historical_games()` — historical game data |

@@ -47,20 +47,6 @@ class TestModelTablenames:
         assert 'status' not in col_names
         assert 'clock' not in col_names
 
-    def test_live_game_tablename_is_live_game(self):
-        """LiveGame.__tablename__ must be 'live_game'."""
-        from models import LiveGame
-        assert LiveGame.__tablename__ == 'live_game'
-
-    def test_live_game_has_live_score_columns(self):
-        """LiveGame must expose the live-score columns from the old game table."""
-        from models import LiveGame
-        col_names = {col.name for col in LiveGame.__table__.columns}
-        assert 'away_code' in col_names
-        assert 'status' in col_names
-        assert 'period' in col_names
-        assert 'clock' in col_names
-
     def test_nhl_historical_game_not_in_models(self):
         """NhlHistoricalGame must no longer be exported from models."""
         assert not hasattr(models, 'NhlHistoricalGame')
@@ -89,12 +75,6 @@ class TestSchemaInDb:
         col_names = {col['name'] for col in inspector.get_columns('game')}
         assert 'away_code' not in col_names
         assert 'status' not in col_names
-
-    def test_live_game_table_exists(self, db):
-        """'live_game' table must exist in the test DB schema."""
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        assert 'live_game' in inspector.get_table_names()
 
     def test_nhl_historical_game_table_absent(self, db):
         """'nhl_historical_game' table must not exist after the migration."""
@@ -192,23 +172,11 @@ class TestMigrateAwayColumns:
 
 
 class TestForeignKeys:
-    def test_odds_snapshot_fk_references_live_game(self):
-        """OddsSnapshot.game_id FK must reference live_game.game_id."""
-        from models import OddsSnapshot
-        fk = next(iter(OddsSnapshot.__table__.c.game_id.foreign_keys))
-        assert fk.target_fullname == 'live_game.game_id'
-
-    def test_model_fair_fk_references_live_game(self):
-        """ModelFair.game_id FK must reference live_game.game_id."""
-        from models import ModelFair
-        fk = next(iter(ModelFair.__table__.c.game_id.foreign_keys))
-        assert fk.target_fullname == 'live_game.game_id'
-
-    def test_nhl_odds_line_fk_references_live_game(self):
-        """NhlOddsLine.game_id FK must reference live_game.game_id."""
+    def test_nhl_odds_line_game_id_has_no_fk(self):
+        """NhlOddsLine.game_id is a plain integer with no FK constraint."""
         from models import NhlOddsLine
-        fk = next(iter(NhlOddsLine.__table__.c.game_id.foreign_keys))
-        assert fk.target_fullname == 'live_game.game_id'
+        assert len(NhlOddsLine.__table__.c.game_id.foreign_keys) == 0
+
 
 
 class TestGameModelRoundtrip:

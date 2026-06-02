@@ -56,16 +56,6 @@ def test_devig_example_calculation_present():
         "Devig example total (103.8) not shown"
 
 
-def test_odds_snapshot_append_only_design_explained():
-    """The append-only time-series design of odds_snapshot must be explained."""
-    text = _doc_text().lower()
-    assert "odds_snapshot" in text, "odds_snapshot table not mentioned"
-    assert "append" in text or "time-series" in text or "time series" in text, \
-        "Append-only / time-series design not explained"
-    assert "sparkline" in text or "trend" in text or "history" in text, \
-        "Reason for keeping history (sparklines/trends) not documented"
-
-
 def test_to_replace_stub_section_present():
     """A 'to replace the stub' section must exist."""
     text = _doc_text().lower()

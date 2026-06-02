@@ -24,29 +24,9 @@ def _with_ctx(fn):
     return wrapper
 
 
-def _poll_schedule():
-    from services.slate import refresh_schedule
-    refresh_schedule()
-
-
-def _poll_scores():
-    from services.scores import refresh_scores
-    refresh_scores()
-
-
-def _poll_odds():
-    from services.slate import refresh_odds
-    refresh_odds()
-
-
-def _compute_fair():
-    from services.implied import compute_all_fair
-    compute_all_fair()
-
-
-def _prune_snapshots():
-    from services.slate import prune_old_snapshots
-    prune_old_snapshots()
+def _poll_nhl_odds():
+    from services.scores import refresh_nhl_odds
+    refresh_nhl_odds()
 
 
 def _refresh_historical():
@@ -64,11 +44,6 @@ def _prune_stale_boxscores():
     prune_stale_boxscores()
 
 
-def _refresh_dashboard_games():
-    from services.dashboard_game import refresh_dashboard_games
-    refresh_dashboard_games()
-
-
 def start_scheduler(app):
     global _scheduler, _app, last_poll_time
     _app = app
@@ -76,24 +51,10 @@ def start_scheduler(app):
 
     cfg = app.config
 
-    _scheduler.add_job(_with_ctx(_poll_schedule),      'interval', seconds=cfg['POLL_SCHEDULE_INTERVAL'], id='poll_schedule',         replace_existing=True)
-    _scheduler.add_job(_with_ctx(_poll_scores),        'interval', seconds=cfg['POLL_SCORE_INTERVAL'],   id='poll_scores',           replace_existing=True)
-    _scheduler.add_job(_with_ctx(_poll_odds),          'interval', seconds=cfg['POLL_ODDS_INTERVAL'],    id='poll_odds',             replace_existing=True)
-    _scheduler.add_job(_with_ctx(_compute_fair),       'interval', seconds=cfg['COMPUTE_FAIR_INTERVAL'], id='compute_fair',          replace_existing=True)
-    _scheduler.add_job(_with_ctx(_prune_snapshots),    'interval', seconds=cfg['PRUNE_INTERVAL'],        id='prune',                 replace_existing=True)
-    # Daily at 08:00 UTC — after overnight games have completed
-    _scheduler.add_job(_with_ctx(_refresh_historical), 'cron',     hour=8, minute=0,                           id='refresh_historical',    replace_existing=True)
-    _scheduler.add_job(_with_ctx(_refresh_boxscores),       'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_boxscores',       replace_existing=True)
-    _scheduler.add_job(_with_ctx(_prune_stale_boxscores),   'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='prune_stale_boxscores',   replace_existing=True)
-    _scheduler.add_job(_with_ctx(_refresh_dashboard_games), 'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_dashboard_games', replace_existing=True)
+    _scheduler.add_job(_with_ctx(_poll_nhl_odds),           'interval', seconds=cfg['POLL_SCORE_INTERVAL'],    id='poll_nhl_odds',           replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_historical),      'cron',     hour=8, minute=0,                      id='refresh_historical',      replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_boxscores),     'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_boxscores',     replace_existing=True)
+    _scheduler.add_job(_with_ctx(_prune_stale_boxscores), 'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='prune_stale_boxscores', replace_existing=True)
 
     _scheduler.start()
-
-    # Seed teams before the first slate refresh so FK lookups succeed immediately
-    with app.app_context():
-        from services.seed import seed_teams
-        seed_teams()
-        _poll_schedule()
-        _poll_odds()
-        _compute_fair()
     last_poll_time = datetime.now(timezone.utc)

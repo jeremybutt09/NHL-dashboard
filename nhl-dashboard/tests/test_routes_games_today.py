@@ -2,23 +2,19 @@
 import pytest
 from datetime import datetime, timezone
 
-from models import OddsSnapshot
-
 
 class TestGamesTodayPopulated:
-    """Scenario: populated game with odds, fair probabilities, edge, and sparkline."""
+    """Scenario: populated live game in boxscore table."""
 
     @pytest.fixture(autouse=True)
-    def seed_db(self, boxscore_factory, odds_snapshot_factory, model_fair_factory):
-        """Seed DB with one live boxscore game, one odds snapshot, and one fair-probability row."""
+    def seed_db(self, boxscore_factory):
+        """Seed DB with one live boxscore game."""
         self.game = boxscore_factory(
             'TOR', 'BOS',
             away_name='Toronto Maple Leafs',
             home_name='Boston Bruins',
             game_state='LIVE', away_score=2, home_score=1, period='2', clock='10:00',
         )
-        odds_snapshot_factory(self.game.game_id, away_ml=-110, home_ml=100)
-        model_fair_factory(self.game.game_id, home_fair=55.0, away_fair=45.0)
 
     def test_games_today_returns_200(self, client):
         assert client.get('/api/games/today').status_code == 200
@@ -55,36 +51,23 @@ class TestGamesTodayPopulated:
         assert game['away']['name'] == 'Toronto Maple Leafs'
         assert game['home']['name'] == 'Boston Bruins'
 
-    def test_games_today_ml_away_is_integer(self, client):
+    def test_games_today_ml_is_null_without_partner_id(self, client):
+        """ml is null when no partner_id is provided (no consensus odds source)."""
         game = client.get('/api/games/today').get_json()['games'][0]
-        assert game['ml'] is not None
-        assert isinstance(game['ml']['away'], int)
+        assert game['ml'] is None
 
-    def test_games_today_ml_home_is_integer(self, client):
+    def test_games_today_fair_is_null(self, client):
+        """fair is null — no odds data to compute from."""
         game = client.get('/api/games/today').get_json()['games'][0]
-        assert isinstance(game['ml']['home'], int)
+        assert game['fair'] is None
 
-    def test_games_today_fair_values_are_floats(self, client):
+    def test_games_today_edge_is_null(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
-        assert isinstance(game['fair']['away'], float)
-        assert isinstance(game['fair']['home'], float)
+        assert game['edge'] is None
 
-    def test_games_today_fair_probs_sum_to_one_hundred(self, client):
+    def test_games_today_sparkline_is_empty_list(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
-        total = game['fair']['away'] + game['fair']['home']
-        assert total == pytest.approx(100.0, abs=0.01)
-
-    def test_games_today_edge_is_signed_float(self, client):
-        game = client.get('/api/games/today').get_json()['games'][0]
-        assert isinstance(game['edge'], float)
-
-    def test_games_today_sparkline_is_list(self, client):
-        game = client.get('/api/games/today').get_json()['games'][0]
-        assert isinstance(game['movement_24h'], list)
-
-    def test_games_today_sparkline_length_matches_snapshot_count(self, client):
-        game = client.get('/api/games/today').get_json()['games'][0]
-        assert len(game['movement_24h']) == 1
+        assert game['movement_24h'] == []
 
     def test_games_today_live_block_present_for_live_game(self, client):
         game = client.get('/api/games/today').get_json()['games'][0]
@@ -111,26 +94,6 @@ class TestGamesTodayPopulated:
         game = client.get('/api/games/today').get_json()['games'][0]
         assert 'game_date' in game
 
-    def test_games_today_sparkline_ordered_ascending(self, client, db):
-        """Entries with earlier fetched_at timestamps appear before later ones."""
-        t1 = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
-        t2 = datetime(2026, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
-        snap1 = OddsSnapshot(
-            game_id=self.game.game_id, fetched_at=t1, book='test',
-            away_ml=-120, home_ml=110, away_implied=45.0, home_implied=55.0,
-        )
-        snap2 = OddsSnapshot(
-            game_id=self.game.game_id, fetched_at=t2, book='test',
-            away_ml=-130, home_ml=120, away_implied=60.0, home_implied=40.0,
-        )
-        db.session.add_all([snap1, snap2])
-        db.session.commit()
-
-        sparkline = client.get('/api/games/today').get_json()['games'][0]['movement_24h']
-        idx1 = sparkline.index(45.0)
-        idx2 = sparkline.index(60.0)
-        assert idx1 < idx2
-
 
 class TestGamesTodayEmpty:
     """Scenario: no game rows in DB returns empty games list."""
@@ -144,7 +107,7 @@ class TestGamesTodayEmpty:
 
 
 class TestGamesTodayMissingOdds:
-    """Scenario: game with no OddsSnapshot rows returns safely without a 500 error."""
+    """Scenario: game with no partner odds returns null ml/edge and empty sparkline."""
 
     @pytest.fixture(autouse=True)
     def seed_db(self, boxscore_factory):
@@ -419,18 +382,12 @@ class TestGamesTodayGameStateTranslation:
         assert game['status'] == 'scheduled'
 
 
-class TestGamesTodayNoLiveGameRequired:
-    """Route must work without any LiveGame rows in the DB (Issue #154)."""
+class TestGamesTodayBoxscoreOnly:
+    """Route serves games from boxscore table only (Issue #154)."""
 
-    def test_games_today_boxscore_only_returns_game(self, client, db, boxscore_factory):
-        """A boxscore game without a matching LiveGame row appears in the response."""
-        from models import LiveGame
-
+    def test_games_today_boxscore_only_returns_game(self, client, boxscore_factory):
+        """A game seeded only in the boxscore table appears in the response."""
         bs = boxscore_factory('EDM', 'VAN', game_state='FUT')
-
-        # Confirm no LiveGame row was created
-        assert db.session.get(LiveGame, bs.game_id) is None
-
         data = client.get('/api/games/today').get_json()
         assert bs.game_id in [g['game_id'] for g in data['games']]
 

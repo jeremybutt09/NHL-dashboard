@@ -10,7 +10,7 @@ def games_today():
 
     Query params:
         partner_id: Optional int.  When provided, odds come from nhl_odds_line
-            filtered to that partner rather than the consensus OddsSnapshot.
+            filtered to that partner via the nhl_odds_line table.
 
     Returns:
         200 JSON with games array on success, 500 JSON on unexpected error.

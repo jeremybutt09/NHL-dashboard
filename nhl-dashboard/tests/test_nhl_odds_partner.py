@@ -176,35 +176,35 @@ class TestUpsertPartners:
         assert rows == []
 
 
-# ── refresh_scores integration ────────────────────────────────────────────────
+# ── refresh_nhl_odds integration ────────────────────────────────────────────────
 
-class TestRefreshScoresPartnersIntegration:
-    def test_refresh_scores_upserts_partners_when_key_present(self, db):
-        """refresh_scores() upserts NhlOddsPartner rows when oddsPartners is in the response."""
+class TestRefreshNhlOddsPartnersIntegration:
+    def test_refresh_nhl_odds_upserts_partners_when_key_present(self, db):
+        """refresh_nhl_odds() upserts NhlOddsPartner rows when oddsPartners is in the response."""
         api_data = _make_score_now(partners=[_PARTNER_FANDUEL, _PARTNER_DRAFTKINGS])
         with patch("nhl_client.get_score_now", return_value=api_data):
-            from services.scores import refresh_scores
-            refresh_scores()
+            from services.scores import refresh_nhl_odds
+            refresh_nhl_odds()
 
         rows = db.session.scalars(select(NhlOddsPartner)).all()
         assert len(rows) == 2
 
-    def test_refresh_scores_handles_absent_odds_partners_key(self, db):
-        """refresh_scores() does not raise when oddsPartners key is absent."""
+    def test_refresh_nhl_odds_handles_absent_odds_partners_key(self, db):
+        """refresh_nhl_odds() does not raise when oddsPartners key is absent."""
         api_data = _make_score_now()  # no oddsPartners key
         with patch("nhl_client.get_score_now", return_value=api_data):
-            from services.scores import refresh_scores
-            refresh_scores()  # must not raise
+            from services.scores import refresh_nhl_odds
+            refresh_nhl_odds()  # must not raise
 
         rows = db.session.scalars(select(NhlOddsPartner)).all()
         assert rows == []
 
-    def test_refresh_scores_handles_empty_odds_partners_array(self, db):
-        """refresh_scores() does not raise when oddsPartners is an empty list."""
+    def test_refresh_nhl_odds_handles_empty_odds_partners_array(self, db):
+        """refresh_nhl_odds() does not raise when oddsPartners is an empty list."""
         api_data = _make_score_now(partners=[])
         with patch("nhl_client.get_score_now", return_value=api_data):
-            from services.scores import refresh_scores
-            refresh_scores()  # must not raise
+            from services.scores import refresh_nhl_odds
+            refresh_nhl_odds()  # must not raise
 
         rows = db.session.scalars(select(NhlOddsPartner)).all()
         assert rows == []

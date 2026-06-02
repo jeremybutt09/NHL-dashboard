@@ -126,7 +126,7 @@ def create_app(config_class=Config, test_config=None):
 
         Run this once against a production DB that was created before Issue #131.
         Both steps execute in a single transaction to avoid naming conflicts.
-        After migration, run db.create_all() (or restart the app) to create live_game.
+        After migration, run db.create_all() (or restart the app) to recreate tables.
         """
         import click
         from sqlalchemy import text

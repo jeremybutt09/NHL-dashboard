@@ -1,5 +1,4 @@
 """Tests verifying pytest infrastructure fixtures (Issue #87)."""
-import pytest
 
 
 def test_app_testing_flag_is_set(app):
@@ -27,40 +26,6 @@ def test_team_factory_creates_committed_row(team_factory, db):
     assert Team.query.get("TOR") is not None
 
 
-def test_game_factory_creates_live_row(game_factory, team_factory, db):
-    """game_factory creates a live LiveGame with default scores 2-1."""
-    from models import LiveGame
-    team_factory(code="TOR", name="Toronto Maple Leafs")
-    team_factory(code="BOS", name="Boston Bruins")
-    game = game_factory(away_code="TOR", home_code="BOS")
-    assert game.status == "live"
-    assert game.away_score == 2
-    assert game.home_score == 1
-    assert LiveGame.query.get(game.game_id) is not None
-
-
-def test_odds_snapshot_factory_creates_row(
-    odds_snapshot_factory, game_factory, team_factory, db
-):
-    """odds_snapshot_factory creates one OddsSnapshot with valid American odds."""
-    team_factory(code="TOR", name="Toronto Maple Leafs")
-    team_factory(code="BOS", name="Boston Bruins")
-    game = game_factory(away_code="TOR", home_code="BOS")
-    snap = odds_snapshot_factory(game_id=game.game_id)
-    assert snap.away_ml == -110
-    assert snap.home_ml == 100
-
-
-def test_model_fair_factory_creates_row(
-    model_fair_factory, game_factory, team_factory, db
-):
-    """model_fair_factory creates a ModelFair row with home_fair=55.0, away_fair=45.0."""
-    team_factory(code="TOR", name="Toronto Maple Leafs")
-    team_factory(code="BOS", name="Boston Bruins")
-    game = game_factory(away_code="TOR", home_code="BOS")
-    fair = model_fair_factory(game_id=game.game_id)
-    assert fair.home_fair == pytest.approx(55.0)
-    assert fair.away_fair == pytest.approx(45.0)
 
 
 def test_client_get_health_returns_response(client):
