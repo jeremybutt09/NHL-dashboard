@@ -5,27 +5,14 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from services.time_utils import now_et, today_et
+from services.time_utils import today_et
 
 _EASTERN = ZoneInfo("America/New_York")
 
 from extensions import db
-from models import NhlOddsLine, Boxscore
+from models import Boxscore
 
 logger = logging.getLogger(__name__)
-
-
-def prune_nhl_odds_lines():
-    """Delete NhlOddsLine rows older than 30 days."""
-    from sqlalchemy import delete
-    from datetime import timedelta
-
-    cutoff = now_et() - timedelta(days=30)
-    result = db.session.execute(
-        delete(NhlOddsLine).where(NhlOddsLine.fetched_at < cutoff)
-    )
-    db.session.commit()
-    logger.info('[slate] Pruned %d nhl_odds_line rows older than 30 days', result.rowcount)
 
 
 def build_today_response(partner_id: int | None = None, date: str | None = None) -> dict:
