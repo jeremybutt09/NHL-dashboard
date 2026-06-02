@@ -219,3 +219,42 @@ class TestBoxscoreExplorerSections:
             term in src
             for term in ["column", "table_name", "proposed_table"]
         )
+
+
+class TestBoxscoreExplorerStarSchemaFix163:
+    """Tests for Issue #163 — fix star schema FK target to boxscore.game_id."""
+
+    def test_skater_stats_fk_targets_boxscore_game_id(self):
+        """boxscore_skater_stats DDL must show FK → boxscore.game_id."""
+        src = _notebook_source()
+        assert "FK → boxscore.game_id" in src, (
+            "Expected '-- FK → boxscore.game_id' in skater_stats DDL but found game.game_id."
+        )
+
+    def test_skater_stats_fk_does_not_reference_game_game_id(self):
+        """No fact-table DDL FK comment must reference game.game_id."""
+        src = _notebook_source()
+        assert "FK → game.game_id" not in src, (
+            "Found '-- FK → game.game_id' — fact tables should FK to boxscore.game_id."
+        )
+
+    def test_boxscore_listed_as_existing_dimension_table(self):
+        """Star schema diagram must list boxscore under Existing dimension tables."""
+        src = _notebook_source()
+        assert "| `boxscore` | `game_id`" in src, (
+            "Expected '| `boxscore` | `game_id`' row in Existing dimension tables section."
+        )
+
+    def test_game_not_listed_as_existing_dimension_table(self):
+        """Star schema diagram must not list game as an existing dimension table."""
+        src = _notebook_source()
+        assert "| `game` | `game_id`" not in src, (
+            "Found '| `game` | `game_id`' — game should be replaced by boxscore in Existing tables."
+        )
+
+    def test_tradeoffs_documents_fk_to_boxscore_not_game(self):
+        """Trade-offs table must document FK → boxscore (not game) decision."""
+        src = _notebook_source()
+        assert "FK → `boxscore`" in src, (
+            "Trade-offs table must have a row documenting that fact tables FK to boxscore, not game."
+        )
