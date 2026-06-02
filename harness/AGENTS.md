@@ -31,6 +31,7 @@ This project follows strict **Test-Driven Development**.
 3. **Refactor**: Clean up the code while ensuring tests stay green.
 
 - **Framework**: Use `pytest` for backend; Vitest for frontend.
+- **Run command**: `python -m pytest tests/` — must be green before every commit. Use `./init.sh` for a full bootstrap (installs deps + runs pytest).
 - **Coverage**: Every new function requires a corresponding test case.
 - **Naming**: Test functions must follow `test_<function>_<scenario>`.
 - **Mocking**: Always mock external API calls (NHL API, the-odds-api) — never hit real APIs in tests.

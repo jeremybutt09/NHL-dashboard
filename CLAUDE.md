@@ -74,3 +74,7 @@ These updates are **part of the same commit as the schema change** — they are 
 ## AI session state
 
 The `memory/` directory is intentionally gitignored. It contains auto-generated context files written by Claude during agent runs and is not source code. Do not commit or force-track files under `memory/`.
+
+## Skills submodule (ai-skills/)
+
+The `ai-skills/` directory is a git submodule containing reusable Claude skills (PM, product, strategy, etc.). It is symlinked to `.claude/skills/` so Claude Code picks them up automatically. Invoke skills via `/skill-name` in the Claude Code CLI. These skills are unrelated to NHL data work — use them for product framing, user stories, or sprint planning, not for backend implementation tasks. Do not modify files under `ai-skills/`.

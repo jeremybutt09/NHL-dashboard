@@ -2,6 +2,16 @@
 
 _Source of truth: `docs/PRODUCT_BRIEF.md` and `docs/ROADMAP.md`. This file is a distillation for AI agent sessions._
 
+## Status
+
+**MVP complete as of Issue #122 (2026-05-25).** The three core MVP features — Live Scoreboard, Betting Odds (the-odds-api), and NHL Historical Game Data — are fully implemented and merged into `main`. Do not re-implement these features.
+
+Post-MVP backlog (pending):
+- Puckline & Totals bet types
+- Dollar Return Calculator
+- Public Hosting (Render / Railway / Fly.io)
+- Basic Analytics (Plausible or PostHog)
+
 ---
 
 ## Product Vision

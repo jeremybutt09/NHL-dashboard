@@ -6,7 +6,7 @@ _Update this file at the end of every session so the next agent can resume clean
 
 ## Last closed issue
 
-**#122** — Add daily 30-day refresh for NHL historical game updates (2026-05-25)
+**#161** — Weekly harness review: 2026-06-01
 
 ## MVP completion status
 

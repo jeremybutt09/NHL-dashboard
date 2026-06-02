@@ -117,10 +117,12 @@ def test_session_handoff_exists():
 
 
 def test_session_handoff_mentions_last_issue():
-    """session-handoff.md must document the last closed issue (≥ #122)."""
+    """session-handoff.md must document a recent closed issue (≥ #122)."""
+    import re
     text = _read(_HANDOFF)
-    assert "#122" in text or "122" in text, (
-        "session-handoff.md must document the last closed issue (#122)"
+    issue_numbers = [int(n) for n in re.findall(r"#(\d+)", text)]
+    assert any(n >= 122 for n in issue_numbers), (
+        "session-handoff.md must document a recent closed issue (≥ #122)"
     )
 
 
