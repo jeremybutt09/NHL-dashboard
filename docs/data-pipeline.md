@@ -14,7 +14,9 @@ NHL /v1/score/now
   └──> refresh_nhl_odds()  ──> nhl_odds_partner (upsert), nhl_odds_line (insert)
 
 NHL /v1/gamecenter/{id}/boxscore
-  └──> refresh_boxscores() ──> boxscore (upsert by game_id)
+  └──> refresh_boxscores()
+         └──> boxscore (upsert by game_id)
+         └──> fact_boxscore_game_stats (upsert by game_id) [Issue #170]
   └──> refresh_boxscore_player_stats()
          └──> persist_skater_stats()  ──> fact_skater_stats (upsert by game_id, player_id)
          └──> persist_goalie_stats()  ──> fact_goalie_stats (upsert by game_id, player_id)
@@ -50,7 +52,7 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 | `poll_nhl_odds` | Every 30 seconds | `refresh_nhl_odds()` in `services/scores.py` | `nhl_odds_partner`, `nhl_odds_line` | Upsert partners; insert odds lines |
 | `poll_odds` | Every 5 minutes | `refresh_odds()` in `services/slate.py` | `odds_snapshot` | Insert-only (append) |
 | `prune` | Every 1 hour | `prune_old_snapshots()` in `services/slate.py` | `odds_snapshot` | Delete (age-based purge) |
-| `refresh_boxscores` | Every 60 seconds | `refresh_boxscores()` in `services/boxscore.py` | `boxscore` | Upsert by `game_id` |
+| `refresh_boxscores` | Every 60 seconds | `refresh_boxscores()` in `services/boxscore.py` | `boxscore`, `fact_boxscore_game_stats` | Upsert by `game_id` |
 | `prune_stale_boxscores` | Every 60 seconds | `prune_stale_boxscores()` in `services/boxscore.py` | `boxscore`, `game` | Delete stale rows |
 | `refresh_player_stats` | Every 60 seconds | `refresh_boxscore_player_stats()` in `services/player_stats.py` | `fact_skater_stats`, `fact_goalie_stats`, `dim_player` | Upsert by `(game_id, player_id)`; backfills `dim_player` for unknown players |
 | `refresh_dashboard_games` | Every 60 seconds | `refresh_dashboard_games()` in `services/dashboard_game.py` | `dashboard_game` | Upsert by `game_id` |
@@ -140,8 +142,12 @@ The resulting `away_fair` and `home_fair` values sum to 100 and are returned dir
 **What it does:** Resolves today's game IDs by querying the `game` table (filtered to `game_date == today`), then calls `GET /v1/gamecenter/{id}/boxscore` for each game. Upserts the result into `boxscore` using `db.session.merge()` on `game_id`. API failures for individual games are logged and skipped so a single bad game does not block the rest.
 
 **Tables read:** `game` (filter by `game_date == today`)  
-**Tables written:** `boxscore` (upsert by `game_id`)  
-**Update strategy:** Upsert — `db.session.merge()` on `game_id` PK
+**Tables written:** `boxscore` (upsert by `game_id`), `fact_boxscore_game_stats` (upsert by `game_id`)  
+**Update strategy:** Upsert — `db.session.merge()` on `game_id` PK for both tables
+
+During the transition period (Issues #170 → retirement of `boxscore`), `refresh_boxscores()` writes
+both `boxscore` and `fact_boxscore_game_stats` in the same pass. `fact_boxscore_game_stats` adds
+`away_team_id` and `home_team_id` absent from `boxscore`.
 
 **Staleness signal:** If `boxscore.updated_at` is stale during a live game, check the `game` table for today's `game_date` entries — if empty, the historical ingest has not run yet.
 
@@ -252,7 +258,7 @@ Alternatively, set `TESTING = True` in the app config — this skips `start_sche
 | `nhl-dashboard/backend/scheduler.py` | All job definitions and registration; `start_scheduler(app)` entry point |
 | `nhl-dashboard/backend/services/slate.py` | `refresh_odds()` — odds snapshot insert; `prune_old_snapshots()` — age purge; `build_today_response()` — serve /api/games/today |
 | `nhl-dashboard/backend/services/scores.py` | `refresh_nhl_odds()` — poll /v1/score/now and write nhl_odds_line rows |
-| `nhl-dashboard/backend/services/boxscore.py` | `refresh_boxscores()` — live boxscore upsert; `backfill_boxscores()` — historical fill |
+| `nhl-dashboard/backend/services/boxscore.py` | `refresh_boxscores()` — live boxscore upsert; `backfill_boxscores()` — historical fill; `persist_fact_boxscore_game_stats()` — game-level fact table upsert |
 | `nhl-dashboard/backend/services/dashboard_game.py` | `refresh_dashboard_games()` — derive app-ready game view from boxscore |
 | `nhl-dashboard/backend/services/implied.py` | `devig_two_way()`, `american_to_implied()`, `edge()` — pure probability math |
 | `nhl-dashboard/backend/odds_client.py` | `fetch_odds(game_ids)` — currently a stub fixture |

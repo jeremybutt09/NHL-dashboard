@@ -8,7 +8,7 @@ by the API that are **not** consumed by the current implementation are listed in
 Source files:
 - `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_score_now()`, `get_boxscore()`, `get_player_landing()` (module-level functions, no class)
 - `nhl-dashboard/backend/services/scores.py` — `refresh_nhl_odds()` (partner odds pipeline via `/v1/score/now`)
-- `nhl-dashboard/backend/services/boxscore.py` — `refresh_boxscores()`, `backfill_boxscores()`
+- `nhl-dashboard/backend/services/boxscore.py` — `refresh_boxscores()`, `backfill_boxscores()`, `persist_fact_boxscore_game_stats()`
 - `nhl-dashboard/backend/services/player_stats.py` — `persist_skater_stats()`, `persist_goalie_stats()`, `refresh_boxscore_player_stats()`
 - `nhl-dashboard/backend/odds_client.py` — deterministic fixture stub
 
@@ -139,6 +139,33 @@ One row per game; upserted by `game_id` on each call.
 | `periodDescriptor` | `boxscore.period` | `_parse_period()` in `services/boxscore.py`: `"OT"` / `"SO"` / ordinal |
 | `clock.timeRemaining` | `boxscore.clock` | None — stored as-is |
 | `gameState` | `boxscore.game_state` | None — stored verbatim (`FUT`, `PRE`, `LIVE`, `CRIT`, `FINAL`, `OFF`) |
+
+### → `fact_boxscore_game_stats` table (Issue #170)
+
+One row per game; upserted by `game_id` on each call. Coexists with `boxscore` during the
+transition period. Adds `away_team_id` and `home_team_id`.
+
+| API JSON path | `fact_boxscore_game_stats` column | Transform |
+|---|---|---|
+| `id` | `game_id` | Integer primary key — not auto-generated |
+| `season` | `season_id` | Integer (e.g. `20252026`) |
+| `gameType` | `game_type` | Integer (2 = regular, 3 = playoffs) |
+| `gameDate` | `game_date` | String in `YYYY-MM-DD` format |
+| `venue.default` | `venue` | String extracted from `venue` dict |
+| `startTimeUTC` | `start_time_est` | Parsed via `fromisoformat()`, converted to `US/Eastern` |
+| `gameState` | `game_state` | None — stored verbatim (`FUT`, `PRE`, `LIVE`, `CRIT`, `FINAL`, `OFF`) |
+| `awayTeam.id` | `away_team_id` | Integer — numeric NHL team ID |
+| `awayTeam.abbrev` | `away_abbrev` | None |
+| `awayTeam.name.default` | `away_name` | Extracted from name dict |
+| `awayTeam.score` | `away_score` | None |
+| `awayTeam.sog` | `away_sog` | None |
+| `homeTeam.id` | `home_team_id` | Integer — numeric NHL team ID |
+| `homeTeam.abbrev` | `home_abbrev` | None |
+| `homeTeam.name.default` | `home_name` | Extracted from name dict |
+| `homeTeam.score` | `home_score` | None |
+| `homeTeam.sog` | `home_sog` | None |
+| `clock.timeRemaining` | `clock` | None — stored as-is |
+| `periodDescriptor` | `period` | `_parse_period()` in `services/boxscore.py`: `"OT"` / `"SO"` / ordinal |
 
 ---
 

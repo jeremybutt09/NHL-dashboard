@@ -387,6 +387,48 @@ is parsed into separate `saves` and `shots_against` integer columns.
 
 ---
 
+### `fact_boxscore_game_stats`
+
+Canonical game-level boxscore fact table sourced from `GET /v1/gamecenter/{id}/boxscore`
+(Issue #170). One row per `game_id`; upserted on each refresh so live fields (score, SOG,
+period, clock, game_state) stay current without duplicating rows. Intended as the migration
+target for retiring the legacy `boxscore` table in a future issue.
+
+Extends the `boxscore` schema with `away_team_id` and `home_team_id`, which the legacy
+table omits. No FK constraints — standalone table, independent of `boxscore`.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY**, NOT NULL | `id` | NHL game ID — not auto-generated |
+| `season_id` | `Integer` | `INTEGER` | — | `season` | Eight-digit season identifier |
+| `game_type` | `Integer` | `INTEGER` | — | `gameType` | Game type code (2 = regular, 3 = playoffs) |
+| `game_date` | `String(10)` | `VARCHAR(10)` | **INDEX** | `gameDate` | Game date in `YYYY-MM-DD` format |
+| `venue` | `String(120)` | `VARCHAR(120)` | — | `venue.default` | Arena name |
+| `start_time_est` | `DateTime` | `DATETIME` | — | `startTimeUTC` → ET | Puck-drop time converted from UTC to US/Eastern |
+| `game_state` | `String(8)` | `VARCHAR(8)` | — | `gameState` | NHL game state (`FUT`, `PRE`, `LIVE`, `CRIT`, `FINAL`, `OFF`) |
+| `away_team_id` | `Integer` | `INTEGER` | — | `awayTeam.id` | Numeric NHL team ID for the away team |
+| `away_abbrev` | `String(8)` | `VARCHAR(8)` | — | `awayTeam.abbrev` | Away team abbreviation |
+| `away_name` | `String(64)` | `VARCHAR(64)` | — | `awayTeam.name.default` | Away team full name |
+| `away_score` | `Integer` | `INTEGER` | — | `awayTeam.score` | Away team goals |
+| `away_sog` | `Integer` | `INTEGER` | — | `awayTeam.sog` | Away team shots on goal |
+| `home_team_id` | `Integer` | `INTEGER` | — | `homeTeam.id` | Numeric NHL team ID for the home team |
+| `home_abbrev` | `String(8)` | `VARCHAR(8)` | — | `homeTeam.abbrev` | Home team abbreviation |
+| `home_name` | `String(64)` | `VARCHAR(64)` | — | `homeTeam.name.default` | Home team full name |
+| `home_score` | `Integer` | `INTEGER` | — | `homeTeam.score` | Home team goals |
+| `home_sog` | `Integer` | `INTEGER` | — | `homeTeam.sog` | Home team shots on goal |
+| `clock` | `String(8)` | `VARCHAR(8)` | — | `clock.timeRemaining` | Time remaining in current period |
+| `period` | `String(8)` | `VARCHAR(8)` | — | `periodDescriptor` | Human-readable period label (`1st`, `2nd`, `3rd`, `OT`, `SO`) |
+
+**Upsert strategy:** `db.session.merge()` on `game_id` PK — idempotent.
+
+**Indices:** Primary key index on `game_id`; secondary index on `game_date`.
+
+**Key difference from `boxscore`:** Adds `away_team_id` and `home_team_id`. No `updated_at` column. No FK constraints to other tables.
+
+**Source function:** `persist_fact_boxscore_game_stats()` in `nhl-dashboard/backend/services/boxscore.py`, called by `refresh_boxscores()` during the transition period.
+
+---
+
 ## Entity-Relationship Summary
 
 ```
@@ -412,6 +454,8 @@ dim_player (player_id PK)
     ↑ FK (game_id) → boxscore (game_id PK)
   fact_goalie_stats (game_id, player_id composite PK)
     ↑ FK (game_id) → boxscore (game_id PK)
+
+fact_boxscore_game_stats (game_id PK)   ← standalone; no FK to boxscore or other tables
 ```
 
 - `live_game` references `team` **twice** (home and away via `tri_code`).
@@ -422,3 +466,4 @@ dim_player (player_id PK)
 - `boxscore` is a **standalone** table sourced from `GET /v1/gamecenter/{id}/boxscore`. Its `game_id` values correspond to IDs in the `game` table but there is no FK constraint.
 - `dashboard_game` is a **standalone** derived view of today's boxscores. Its rows are copied from `boxscore` by `refresh_dashboard_games()`.
 - `fact_skater_stats` and `fact_goalie_stats` reference both `boxscore` (via `game_id`) and `dim_player` (via `player_id`). The composite primary key `(game_id, player_id)` ensures at most one fact row per player per game.
+- `fact_boxscore_game_stats` is a **standalone** game-level fact table with no FK constraints. Its `game_id` values correspond to those in `boxscore` but are not enforced. It is the planned migration target for retiring `boxscore`.

@@ -187,6 +187,41 @@ class FactGoalieStats(db.Model):
         return f'<FactGoalieStats game={self.game_id} player={self.player_id} decision={self.decision!r}>'
 
 
+class FactBoxscoreGameStats(db.Model):
+    """Game-level boxscore fact table sourced from GET /v1/gamecenter/{id}/boxscore.
+
+    Canonical replacement target for the legacy `boxscore` table (Issue #170).
+    One row per game_id; upserted on each refresh so live fields (score, SOG,
+    period, clock, game_state) stay current without duplicating rows.
+    Extends `boxscore` with away_team_id and home_team_id, which the legacy
+    table omits. No FK constraints — standalone table, independent of boxscore.
+    """
+    __tablename__ = 'fact_boxscore_game_stats'
+
+    game_id        = db.Column(db.Integer, primary_key=True)               # API: id
+    season_id      = db.Column(db.Integer)                                  # API: season
+    game_type      = db.Column(db.Integer)                                  # API: gameType (2=regular, 3=playoffs)
+    game_date      = db.Column(db.String(10), index=True)                  # API: gameDate (YYYY-MM-DD)
+    venue          = db.Column(db.String(120))                              # API: venue.default
+    start_time_est = db.Column(db.DateTime)                                 # API: startTimeUTC → ET
+    game_state     = db.Column(db.String(8))                                # API: gameState (FUT/PRE/LIVE/CRIT/FINAL/OFF)
+    away_team_id   = db.Column(db.Integer)                                  # API: awayTeam.id
+    away_abbrev    = db.Column(db.String(8))                                # API: awayTeam.abbrev
+    away_name      = db.Column(db.String(64))                               # API: awayTeam.name.default
+    away_score     = db.Column(db.Integer)                                  # API: awayTeam.score
+    away_sog       = db.Column(db.Integer)                                  # API: awayTeam.sog
+    home_team_id   = db.Column(db.Integer)                                  # API: homeTeam.id
+    home_abbrev    = db.Column(db.String(8))                                # API: homeTeam.abbrev
+    home_name      = db.Column(db.String(64))                               # API: homeTeam.name.default
+    home_score     = db.Column(db.Integer)                                  # API: homeTeam.score
+    home_sog       = db.Column(db.Integer)                                  # API: homeTeam.sog
+    clock          = db.Column(db.String(8))                                # API: clock.timeRemaining
+    period         = db.Column(db.String(8))                                # parsed from periodDescriptor
+
+    def __repr__(self):
+        return f'<FactBoxscoreGameStats {self.game_id} {self.away_abbrev}@{self.home_abbrev}>'
+
+
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 

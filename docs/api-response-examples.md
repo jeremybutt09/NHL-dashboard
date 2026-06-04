@@ -347,6 +347,68 @@ object shape.
 
 ---
 
+## NHL Web API — `GET /v1/gamecenter/{game_id}/boxscore` → `fact_boxscore_game_stats` fields
+
+**Base URL:** `https://api-web.nhle.com/v1`
+
+The game-level fields of the boxscore response feed `fact_boxscore_game_stats` (Issue #170)
+via `persist_fact_boxscore_game_stats()` in `services/boxscore.py`. The same call also
+feeds the legacy `boxscore` table — both coexist during the transition period.
+
+### Top-level game shape (abbreviated)
+
+```json
+{
+  "id": 2026030247,
+  "season": 20252026,
+  "gameType": 3,
+  "gameDate": "2026-06-01",
+  "gameState": "FINAL",
+  "venue": { "default": "Scotiabank Arena" },
+  "startTimeUTC": "2026-06-01T23:00:00Z",
+  "awayTeam": {
+    "id": 10,
+    "abbrev": "TOR",
+    "name": { "default": "Toronto Maple Leafs" },
+    "score": 3,
+    "sog": 28
+  },
+  "homeTeam": {
+    "id": 6,
+    "abbrev": "BOS",
+    "name": { "default": "Boston Bruins" },
+    "score": 2,
+    "sog": 30
+  },
+  "periodDescriptor": { "number": 3, "periodType": "REG" },
+  "clock": { "timeRemaining": "00:00" }
+}
+```
+
+| API field | `fact_boxscore_game_stats` column | Notes |
+|---|---|---|
+| `id` | `game_id` | Integer PK |
+| `season` | `season_id` | e.g. `20252026` |
+| `gameType` | `game_type` | 2 = regular, 3 = playoffs |
+| `gameDate` | `game_date` | `YYYY-MM-DD` string |
+| `venue.default` | `venue` | Arena name |
+| `startTimeUTC` | `start_time_est` | Converted from UTC to US/Eastern |
+| `gameState` | `game_state` | `FUT` / `PRE` / `LIVE` / `CRIT` / `FINAL` / `OFF` |
+| `awayTeam.id` | `away_team_id` | Numeric NHL team ID — not in legacy `boxscore` table |
+| `awayTeam.abbrev` | `away_abbrev` | Three-letter abbreviation |
+| `awayTeam.name.default` | `away_name` | Full team name |
+| `awayTeam.score` | `away_score` | Goals |
+| `awayTeam.sog` | `away_sog` | Shots on goal |
+| `homeTeam.id` | `home_team_id` | Numeric NHL team ID — not in legacy `boxscore` table |
+| `homeTeam.abbrev` | `home_abbrev` | Three-letter abbreviation |
+| `homeTeam.name.default` | `home_name` | Full team name |
+| `homeTeam.score` | `home_score` | Goals |
+| `homeTeam.sog` | `home_sog` | Shots on goal |
+| `clock.timeRemaining` | `clock` | `MM:SS` string |
+| `periodDescriptor` | `period` | `_parse_period()`: `1st` / `2nd` / `3rd` / `OT` / `SO` |
+
+---
+
 ## NHL Web API — `GET /v1/gamecenter/{game_id}/boxscore` → player stats fields
 
 **Base URL:** `https://api-web.nhle.com/v1`

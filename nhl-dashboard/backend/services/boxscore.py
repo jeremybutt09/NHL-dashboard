@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 import nhl_client
 from extensions import db
-from models import Boxscore, Game, Team
+from models import Boxscore, FactBoxscoreGameStats, Game, Team
 from services.time_utils import now_et
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,85 @@ def _build_boxscore(
     )
 
 
+def _build_fact_boxscore_game_stats(
+    raw: dict,
+    now: datetime,
+) -> FactBoxscoreGameStats:
+    """Map a /v1/gamecenter/{id}/boxscore response to a FactBoxscoreGameStats instance.
+
+    Args:
+        raw: Full API response dict for a single game boxscore.
+        now: Current UTC datetime used as a fallback for start_time_est when
+            startTimeUTC is missing or unparseable.
+
+    Returns:
+        An unsaved FactBoxscoreGameStats instance ready for db.session.merge().
+    """
+    venue_raw = raw.get('venue', '')
+    venue = venue_raw.get('default', '') if isinstance(venue_raw, dict) else (venue_raw or '')
+
+    start_raw = raw.get('startTimeUTC', '')
+    try:
+        start_utc = datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+        start_est = start_utc.astimezone(_EASTERN)
+    except Exception:
+        start_est = now.astimezone(_EASTERN)
+
+    away = raw.get('awayTeam', {})
+    home = raw.get('homeTeam', {})
+
+    away_name_raw = away.get('name', {})
+    home_name_raw = home.get('name', {})
+    away_name = away_name_raw.get('default', '') if isinstance(away_name_raw, dict) else (away_name_raw or '')
+    home_name = home_name_raw.get('default', '') if isinstance(home_name_raw, dict) else (home_name_raw or '')
+
+    period = _parse_period(raw.get('periodDescriptor') or {})
+    clock_raw = raw.get('clock') or {}
+    clock = clock_raw.get('timeRemaining')
+
+    return FactBoxscoreGameStats(
+        game_id=raw['id'],
+        season_id=raw.get('season'),
+        game_type=raw.get('gameType'),
+        game_date=raw.get('gameDate'),
+        venue=venue,
+        start_time_est=start_est,
+        game_state=raw.get('gameState'),
+        away_team_id=away.get('id'),
+        away_abbrev=away.get('abbrev'),
+        away_name=away_name,
+        away_score=away.get('score'),
+        away_sog=away.get('sog'),
+        home_team_id=home.get('id'),
+        home_abbrev=home.get('abbrev'),
+        home_name=home_name,
+        home_score=home.get('score'),
+        home_sog=home.get('sog'),
+        clock=clock,
+        period=period,
+    )
+
+
+def persist_fact_boxscore_game_stats(game_id: int, raw: dict) -> int:
+    """Upsert one FactBoxscoreGameStats row from a raw boxscore API response.
+
+    Args:
+        game_id: NHL game identifier (used for logging; must match raw['id']).
+        raw: Full API response dict from GET /v1/gamecenter/{id}/boxscore.
+
+    Returns:
+        1 if the row was upserted; 0 if raw was empty or lacked an 'id' key.
+    """
+    if not raw or 'id' not in raw:
+        return 0
+
+    now = now_et()
+    record = _build_fact_boxscore_game_stats(raw, now)
+    db.session.merge(record)
+    db.session.commit()
+    return 1
+
+
 def refresh_boxscores() -> int:
     """Fetch boxscore data for today's games and upsert into the boxscore table.
 
@@ -167,6 +246,11 @@ def refresh_boxscores() -> int:
 
         record = _build_boxscore(raw, now, team_lookup=team_lookup)
         db.session.merge(record)
+
+        # Also write to fact_boxscore_game_stats (transition period — Issue #170)
+        fact_record = _build_fact_boxscore_game_stats(raw, now)
+        db.session.merge(fact_record)
+
         count += 1
 
     db.session.commit()
