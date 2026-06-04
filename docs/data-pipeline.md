@@ -15,6 +15,12 @@ NHL /v1/score/now
 
 NHL /v1/gamecenter/{id}/boxscore
   └──> refresh_boxscores() ──> boxscore (upsert by game_id)
+  └──> refresh_boxscore_player_stats()
+         └──> persist_skater_stats()  ──> fact_skater_stats (upsert by game_id, player_id)
+         └──> persist_goalie_stats()  ──> fact_goalie_stats (upsert by game_id, player_id)
+
+NHL /v1/player/{player_id}/landing   [on-demand — called when a player_id is missing from dim_player]
+  └──> _ensure_dim_player()  ──> dim_player (upsert by player_id)
 
 boxscore (today's rows)
   └──> refresh_dashboard_games() ──> dashboard_game (upsert by game_id)
@@ -46,6 +52,7 @@ All jobs are registered in `nhl-dashboard/backend/scheduler.py` via APScheduler 
 | `prune` | Every 1 hour | `prune_old_snapshots()` in `services/slate.py` | `odds_snapshot` | Delete (age-based purge) |
 | `refresh_boxscores` | Every 60 seconds | `refresh_boxscores()` in `services/boxscore.py` | `boxscore` | Upsert by `game_id` |
 | `prune_stale_boxscores` | Every 60 seconds | `prune_stale_boxscores()` in `services/boxscore.py` | `boxscore`, `game` | Delete stale rows |
+| `refresh_player_stats` | Every 60 seconds | `refresh_boxscore_player_stats()` in `services/player_stats.py` | `fact_skater_stats`, `fact_goalie_stats`, `dim_player` | Upsert by `(game_id, player_id)`; backfills `dim_player` for unknown players |
 | `refresh_dashboard_games` | Every 60 seconds | `refresh_dashboard_games()` in `services/dashboard_game.py` | `dashboard_game` | Upsert by `game_id` |
 | `refresh_historical` | Daily at 08:00 UTC | `refresh_recent_historical_games()` in `services/historical.py` | `game` | Upsert (30-day window) |
 | *(on-demand)* | Manual / startup backfill | `ingest_historical_games()` in `services/historical.py` | `game` | Full upsert by `game_id` |

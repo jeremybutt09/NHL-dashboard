@@ -6,9 +6,10 @@ by the API that are **not** consumed by the current implementation are listed in
 "Ignored / unused fields" sections at the end of each endpoint.
 
 Source files:
-- `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_score_now()`, `get_boxscore()` (module-level functions, no class)
+- `nhl-dashboard/backend/nhl_client.py` — `get_schedule_now()`, `get_score_now()`, `get_boxscore()`, `get_player_landing()` (module-level functions, no class)
 - `nhl-dashboard/backend/services/scores.py` — `refresh_nhl_odds()` (partner odds pipeline via `/v1/score/now`)
 - `nhl-dashboard/backend/services/boxscore.py` — `refresh_boxscores()`, `backfill_boxscores()`
+- `nhl-dashboard/backend/services/player_stats.py` — `persist_skater_stats()`, `persist_goalie_stats()`, `refresh_boxscore_player_stats()`
 - `nhl-dashboard/backend/odds_client.py` — deterministic fixture stub
 
 ---
@@ -254,6 +255,95 @@ iterated in a single pass when backfilling.
 | `forwards[].birthCity.default` | Birth city — not stored in MVP |
 | `forwards[].birthStateProvince.default` | Birth state/province — not stored in MVP |
 | `forwards[].spokenLanguages[]` | Languages spoken — not stored |
+
+---
+
+## Endpoint 6 — `/v1/gamecenter/{game_id}/boxscore` → `fact_skater_stats` and `fact_goalie_stats`
+
+**Base URL:** `https://api-web.nhle.com/v1`
+
+The same `get_boxscore()` call that populates the `boxscore` table also feeds player
+stats into `fact_skater_stats` and `fact_goalie_stats` via `persist_skater_stats()` and
+`persist_goalie_stats()` in `services/player_stats.py` (Issue #169).
+
+### → `fact_skater_stats` table
+
+One row per `(game_id, player_id)` for every entry in `playerByGameStats.*.forwards` and
+`playerByGameStats.*.defense`.
+
+| API JSON path | `fact_skater_stats` column | Transform |
+|---|---|---|
+| `id` | `game_id` | Integer composite PK component |
+| `awayTeam.id` / `homeTeam.id` | `team_id` | Integer — the team the player is on |
+| *(structural position)* | `side` | `'away'` or `'home'` derived from position in `playerByGameStats` |
+| *(structural position)* | `position_group` | `'forwards'` or `'defense'` derived from array key |
+| `playerByGameStats.*.*.playerId` | `player_id` | Integer composite PK component |
+| `playerByGameStats.*.*.position` | `position` | `C` / `L` / `R` / `D` |
+| `playerByGameStats.*.*.goals` | `goals` | Integer |
+| `playerByGameStats.*.*.assists` | `assists` | Integer |
+| `playerByGameStats.*.*.points` | `points` | Integer |
+| `playerByGameStats.*.*.plusMinus` | `plus_minus` | Integer |
+| `playerByGameStats.*.*.pim` | `pim` | Integer (penalty minutes) |
+| `playerByGameStats.*.*.toi` | `toi` | `MM:SS` string — stored verbatim |
+| `playerByGameStats.*.*.hits` | `hits` | Integer |
+| `playerByGameStats.*.*.blockedShots` | `blocked_shots` | Integer |
+| `playerByGameStats.*.*.powerPlayGoals` | `pp_goals` | Integer |
+| `playerByGameStats.*.*.powerPlayPoints` | `pp_points` | Integer |
+| `playerByGameStats.*.*.shorthandedGoals` | `sh_goals` | Integer |
+| `playerByGameStats.*.*.faceoffWinningPctg` | `faceoff_win_pct` | Float; NULL for defensemen |
+| `playerByGameStats.*.*.giveaways` | `giveaways` | Integer |
+| `playerByGameStats.*.*.takeaways` | `takeaways` | Integer |
+| `playerByGameStats.*.*.shifts` | `shifts` | Integer |
+
+### → `fact_goalie_stats` table
+
+One row per `(game_id, player_id)` for every entry in `playerByGameStats.*.goalies`.
+
+| API JSON path | `fact_goalie_stats` column | Transform |
+|---|---|---|
+| `id` | `game_id` | Integer composite PK component |
+| `awayTeam.id` / `homeTeam.id` | `team_id` | Integer |
+| *(structural position)* | `side` | `'away'` or `'home'` |
+| `playerByGameStats.*.goalies[].playerId` | `player_id` | Integer composite PK component |
+| `playerByGameStats.*.goalies[].starter` | `starter` | Integer: `1` = starter, `0` = backup |
+| `playerByGameStats.*.goalies[].toi` | `toi` | `MM:SS` string — stored verbatim |
+| `playerByGameStats.*.goalies[].goalsAgainst` | `goals_against` | Integer |
+| `playerByGameStats.*.goalies[].saveShotsAgainst` | `saves` | Left side of `'saves/shots'` string split on `'/'`, cast to int |
+| `playerByGameStats.*.goalies[].saveShotsAgainst` | `shots_against` | Right side of `'saves/shots'` string split on `'/'`, cast to int |
+| `playerByGameStats.*.goalies[].savePctg` | `save_pct` | Float 0.0–1.0 |
+| `playerByGameStats.*.goalies[].evenStrengthShotsAgainst` | `es_shots_against` | Integer |
+| `playerByGameStats.*.goalies[].powerPlayShotsAgainst` | `pp_shots_against` | Integer |
+| `playerByGameStats.*.goalies[].shorthandedShotsAgainst` | `sh_shots_against` | Integer |
+| `playerByGameStats.*.goalies[].pim` | `pim` | Integer |
+| `playerByGameStats.*.goalies[].decision` | `decision` | `W`, `L`, `OTL`, or `None` when key absent (backup) |
+
+---
+
+## Endpoint 7 — `/v1/player/{player_id}/landing`
+
+**Base URL:** `https://api-web.nhle.com/v1`
+
+Called by `get_player_landing(player_id)` in `nhl_client.py` when a player appears in
+`fact_skater_stats` or `fact_goalie_stats` but has no row in `dim_player`. The
+`_ensure_dim_player()` function in `services/player_stats.py` calls this endpoint to
+backfill biographical data before writing the fact row.
+
+### → `dim_player` table
+
+| API JSON path | `dim_player` column | Transform |
+|---|---|---|
+| `playerId` | `player_id` | Integer primary key — not auto-generated |
+| `firstName.default` | `first_name` | Extracted from nested `default` key |
+| `lastName.default` | `last_name` | Extracted from nested `default` key |
+| `sweaterNumber` | `sweater_number` | Integer; overwritten on each upsert |
+| `position` | `position` | String: `C`, `L`, `R`, `D`, or `G` |
+| `shootsCatches` | `shoots_catches` | `L` or `R` |
+| `heightInInches` | `height_in_inches` | Integer |
+| `weightInPounds` | `weight_in_pounds` | Integer |
+| `birthDate` | `birth_date` | String in `YYYY-MM-DD` format |
+| `birthCountry` | `birth_country` | ISO 3-letter country code |
+| `headshot` | `headshot_url` | CDN URL string |
+| *(computed at persist time)* | `updated_at` | Eastern timestamp set by `_ensure_dim_player()` |
 
 ---
 

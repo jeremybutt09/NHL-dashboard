@@ -44,6 +44,11 @@ def _prune_stale_boxscores():
     prune_stale_boxscores()
 
 
+def _refresh_player_stats():
+    from services.player_stats import refresh_boxscore_player_stats
+    refresh_boxscore_player_stats()
+
+
 def start_scheduler(app):
     global _scheduler, _app, last_poll_time
     _app = app
@@ -53,8 +58,9 @@ def start_scheduler(app):
 
     _scheduler.add_job(_with_ctx(_poll_nhl_odds),           'interval', seconds=cfg['POLL_SCORE_INTERVAL'],    id='poll_nhl_odds',           replace_existing=True)
     _scheduler.add_job(_with_ctx(_refresh_historical),      'cron',     hour=8, minute=0,                      id='refresh_historical',      replace_existing=True)
-    _scheduler.add_job(_with_ctx(_refresh_boxscores),     'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_boxscores',     replace_existing=True)
-    _scheduler.add_job(_with_ctx(_prune_stale_boxscores), 'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='prune_stale_boxscores', replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_boxscores),       'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_boxscores',       replace_existing=True)
+    _scheduler.add_job(_with_ctx(_prune_stale_boxscores),   'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='prune_stale_boxscores',   replace_existing=True)
+    _scheduler.add_job(_with_ctx(_refresh_player_stats),    'interval', seconds=cfg['POLL_BOXSCORE_INTERVAL'], id='refresh_player_stats',    replace_existing=True)
 
     _scheduler.start()
     last_poll_time = datetime.now(timezone.utc)

@@ -119,6 +119,74 @@ class DimPlayer(db.Model):
         return f'<DimPlayer {self.player_id} {self.first_name} {self.last_name}>'
 
 
+class FactSkaterStats(db.Model):
+    """Per-game skater statistics fact table sourced from playerByGameStats in
+    GET /v1/gamecenter/{id}/boxscore.
+
+    One row per (game_id, player_id) for every forward and defenseman in the
+    game.  Upserted on each refresh so live-game stats stay current without
+    duplicating rows.  FKs to boxscore (game context) and dim_player (bio).
+    """
+    __tablename__ = 'fact_skater_stats'
+
+    game_id         = db.Column(db.Integer, db.ForeignKey('boxscore.game_id'), primary_key=True, nullable=False)
+    player_id       = db.Column(db.Integer, db.ForeignKey('dim_player.player_id'), primary_key=True, nullable=False)
+    team_id         = db.Column(db.Integer, nullable=False)                        # NHL numeric team ID
+    side            = db.Column(db.String(4), nullable=False)                      # 'away' | 'home'
+    position_group  = db.Column(db.String(10), nullable=False)                     # 'forwards' | 'defense'
+    position        = db.Column(db.String(2))                                      # C / L / R / D
+    goals           = db.Column(db.Integer)                                        # API: goals
+    assists         = db.Column(db.Integer)                                        # API: assists
+    points          = db.Column(db.Integer)                                        # API: points
+    plus_minus      = db.Column(db.Integer)                                        # API: plusMinus
+    pim             = db.Column(db.Integer)                                        # API: pim
+    toi             = db.Column(db.String(8))                                      # API: toi (MM:SS)
+    hits            = db.Column(db.Integer)                                        # API: hits
+    blocked_shots   = db.Column(db.Integer)                                        # API: blockedShots
+    pp_goals        = db.Column(db.Integer)                                        # API: powerPlayGoals
+    pp_points       = db.Column(db.Integer)                                        # API: powerPlayPoints
+    sh_goals        = db.Column(db.Integer)                                        # API: shorthandedGoals
+    faceoff_win_pct = db.Column(db.Float)                                          # API: faceoffWinningPctg (NULL for D)
+    giveaways       = db.Column(db.Integer)                                        # API: giveaways
+    takeaways       = db.Column(db.Integer)                                        # API: takeaways
+    shifts          = db.Column(db.Integer)                                        # API: shifts
+
+    def __repr__(self):
+        return f'<FactSkaterStats game={self.game_id} player={self.player_id}>'
+
+
+class FactGoalieStats(db.Model):
+    """Per-game goalie statistics fact table sourced from playerByGameStats.*.goalies
+    in GET /v1/gamecenter/{id}/boxscore.
+
+    One row per (game_id, player_id) for every goalie dressed in the game.
+    saves and shots_against are stored as separate integers (not the
+    'saves/shots' composite string the API returns in saveShotsAgainst).
+    decision is NULL for backup goalies who did not receive a decision.
+    FKs to boxscore (game context) and dim_player (bio).
+    """
+    __tablename__ = 'fact_goalie_stats'
+
+    game_id          = db.Column(db.Integer, db.ForeignKey('boxscore.game_id'), primary_key=True, nullable=False)
+    player_id        = db.Column(db.Integer, db.ForeignKey('dim_player.player_id'), primary_key=True, nullable=False)
+    team_id          = db.Column(db.Integer, nullable=False)                        # NHL numeric team ID
+    side             = db.Column(db.String(4), nullable=False)                      # 'away' | 'home'
+    starter          = db.Column(db.Integer)                                        # API: starter (1=starter, 0=backup)
+    toi              = db.Column(db.String(8))                                      # API: toi (MM:SS)
+    goals_against    = db.Column(db.Integer)                                        # API: goalsAgainst
+    saves            = db.Column(db.Integer)                                        # parsed from saveShotsAgainst 'saves/shots'
+    shots_against    = db.Column(db.Integer)                                        # parsed from saveShotsAgainst 'saves/shots'
+    save_pct         = db.Column(db.Float)                                          # API: savePctg (0.0–1.0)
+    es_shots_against = db.Column(db.Integer)                                        # API: evenStrengthShotsAgainst
+    pp_shots_against = db.Column(db.Integer)                                        # API: powerPlayShotsAgainst
+    sh_shots_against = db.Column(db.Integer)                                        # API: shorthandedShotsAgainst
+    pim              = db.Column(db.Integer)                                        # API: pim
+    decision         = db.Column(db.String(4))                                      # API: decision (W/L/OTL or NULL)
+
+    def __repr__(self):
+        return f'<FactGoalieStats game={self.game_id} player={self.player_id} decision={self.decision!r}>'
+
+
 class NhlOddsLine(db.Model):
     """Per-game, per-partner moneyline snapshot sourced from /v1/score/now odds arrays.
 

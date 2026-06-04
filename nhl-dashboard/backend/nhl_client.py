@@ -63,6 +63,20 @@ def get_all_games() -> list[dict]:
     return resp.json().get('data', [])
 
 
+def get_player_landing(player_id: int) -> dict:
+    """Player biographical profile: GET /v1/player/{playerId}/landing
+
+    Args:
+        player_id: NHL numeric player identifier.
+
+    Returns:
+        Dict with player profile fields including playerId, firstName,
+        lastName, sweaterNumber, position, shootsCatches, heightInInches,
+        weightInPounds, birthDate, birthCountry, and headshot.
+    """
+    return _get(f'/player/{player_id}/landing')
+
+
 def get_all_teams() -> list[dict]:
     """All NHL franchises: GET https://api.nhle.com/stats/rest/en/team
 

@@ -306,6 +306,87 @@ tables for MVP — `player_id` values correspond to those in `boxscore_skater_st
 
 ---
 
+---
+
+### `fact_skater_stats`
+
+Per-game statistics for every forward and defenseman, sourced from
+`playerByGameStats.{awayTeam,homeTeam}.{forwards,defense}` in
+`GET /v1/gamecenter/{id}/boxscore` (Issue #169). One row per (game_id, player_id);
+upserted on each refresh so live-game stats stay current without duplicating rows.
+FK'd to `boxscore` (game context) and `dim_player` (biographical data).
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY** (composite), NOT NULL, **FOREIGN KEY** → `boxscore.game_id` | `id` | NHL game identifier |
+| `player_id` | `Integer` | `INTEGER` | **PRIMARY KEY** (composite), NOT NULL, **FOREIGN KEY** → `dim_player.player_id` | `playerId` | NHL player identifier |
+| `team_id` | `Integer` | `INTEGER` | NOT NULL | `awayTeam.id` / `homeTeam.id` | NHL numeric team ID |
+| `side` | `String(4)` | `VARCHAR(4)` | NOT NULL | position in API structure | `'away'` or `'home'` |
+| `position_group` | `String(10)` | `VARCHAR(10)` | NOT NULL | position in API structure | `'forwards'` or `'defense'` |
+| `position` | `String(2)` | `VARCHAR(2)` | — | `position` | Position code: `C`, `L`, `R`, or `D` |
+| `goals` | `Integer` | `INTEGER` | — | `goals` | Goals scored |
+| `assists` | `Integer` | `INTEGER` | — | `assists` | Assists |
+| `points` | `Integer` | `INTEGER` | — | `points` | Points (goals + assists) |
+| `plus_minus` | `Integer` | `INTEGER` | — | `plusMinus` | Plus/minus rating |
+| `pim` | `Integer` | `INTEGER` | — | `pim` | Penalty minutes |
+| `toi` | `String(8)` | `VARCHAR(8)` | — | `toi` | Time on ice in `MM:SS` format |
+| `hits` | `Integer` | `INTEGER` | — | `hits` | Hits delivered |
+| `blocked_shots` | `Integer` | `INTEGER` | — | `blockedShots` | Shots blocked |
+| `pp_goals` | `Integer` | `INTEGER` | — | `powerPlayGoals` | Power-play goals |
+| `pp_points` | `Integer` | `INTEGER` | — | `powerPlayPoints` | Power-play points |
+| `sh_goals` | `Integer` | `INTEGER` | — | `shorthandedGoals` | Shorthanded goals |
+| `faceoff_win_pct` | `Float` | `REAL` | — | `faceoffWinningPctg` | Faceoff win percentage; NULL for defensemen |
+| `giveaways` | `Integer` | `INTEGER` | — | `giveaways` | Giveaways |
+| `takeaways` | `Integer` | `INTEGER` | — | `takeaways` | Takeaways |
+| `shifts` | `Integer` | `INTEGER` | — | `shifts` | Number of shifts |
+
+**Primary key:** Composite `(game_id, player_id)` — enables `db.session.merge()` for idempotent upserts.
+
+**Foreign Keys:**
+- `game_id` → `boxscore.game_id`
+- `player_id` → `dim_player.player_id`
+
+**Source function:** `persist_skater_stats()` in `nhl-dashboard/backend/services/player_stats.py`, called by `refresh_boxscore_player_stats()`.
+
+---
+
+### `fact_goalie_stats`
+
+Per-game statistics for every goalie dressed in a game, sourced from
+`playerByGameStats.{awayTeam,homeTeam}.goalies` in
+`GET /v1/gamecenter/{id}/boxscore` (Issue #169). One row per (game_id, player_id);
+upserted on each refresh. The API's `saveShotsAgainst` composite string (`'saves/shots'`)
+is parsed into separate `saves` and `shots_against` integer columns.
+`decision` is `NULL` for backup goalies who received no decision.
+
+| Column | SQLAlchemy Type | SQLite Type | Constraints | Source API field | Description |
+|--------|----------------|-------------|-------------|------------------|-------------|
+| `game_id` | `Integer` | `INTEGER` | **PRIMARY KEY** (composite), NOT NULL, **FOREIGN KEY** → `boxscore.game_id` | `id` | NHL game identifier |
+| `player_id` | `Integer` | `INTEGER` | **PRIMARY KEY** (composite), NOT NULL, **FOREIGN KEY** → `dim_player.player_id` | `playerId` | NHL player identifier |
+| `team_id` | `Integer` | `INTEGER` | NOT NULL | `awayTeam.id` / `homeTeam.id` | NHL numeric team ID |
+| `side` | `String(4)` | `VARCHAR(4)` | NOT NULL | position in API structure | `'away'` or `'home'` |
+| `starter` | `Integer` | `INTEGER` | — | `starter` | `1` = starting goalie, `0` = backup |
+| `toi` | `String(8)` | `VARCHAR(8)` | — | `toi` | Time on ice in `MM:SS` format |
+| `goals_against` | `Integer` | `INTEGER` | — | `goalsAgainst` | Goals allowed |
+| `saves` | `Integer` | `INTEGER` | — | parsed from `saveShotsAgainst` | Saves made (left side of `saves/shots` string) |
+| `shots_against` | `Integer` | `INTEGER` | — | parsed from `saveShotsAgainst` | Total shots faced (right side of `saves/shots` string) |
+| `save_pct` | `Float` | `REAL` | — | `savePctg` | Save percentage as decimal (0.0–1.0) |
+| `es_shots_against` | `Integer` | `INTEGER` | — | `evenStrengthShotsAgainst` | Even-strength shots faced |
+| `pp_shots_against` | `Integer` | `INTEGER` | — | `powerPlayShotsAgainst` | Power-play shots faced |
+| `sh_shots_against` | `Integer` | `INTEGER` | — | `shorthandedShotsAgainst` | Shorthanded shots faced |
+| `pim` | `Integer` | `INTEGER` | — | `pim` | Penalty minutes |
+| `decision` | `String(4)` | `VARCHAR(4)` | — | `decision` | Game decision: `W`, `L`, `OTL`, or `NULL` for backup |
+
+**Primary key:** Composite `(game_id, player_id)` — enables `db.session.merge()` for idempotent upserts.
+
+**Foreign Keys:**
+- `game_id` → `boxscore.game_id`
+- `player_id` → `dim_player.player_id`
+
+**Source function:** `persist_goalie_stats()` in `nhl-dashboard/backend/services/player_stats.py`, called by `refresh_boxscore_player_stats()`.
+
+---
+
 ## Entity-Relationship Summary
 
 ```
@@ -325,7 +406,12 @@ game (game_id PK)   ← standalone historical; no FK to live_game or team
   ↓ derived from
   dashboard_game (game_id PK)   ← standalone; no FK to other tables
 
-dim_player (player_id PK)   ← standalone biographical dimension; no FK constraints for MVP
+dim_player (player_id PK)
+  ↑ FK (player_id)            ↑ FK (player_id)
+  fact_skater_stats (game_id, player_id composite PK)
+    ↑ FK (game_id) → boxscore (game_id PK)
+  fact_goalie_stats (game_id, player_id composite PK)
+    ↑ FK (game_id) → boxscore (game_id PK)
 ```
 
 - `live_game` references `team` **twice** (home and away via `tri_code`).
@@ -335,3 +421,4 @@ dim_player (player_id PK)   ← standalone biographical dimension; no FK constra
 - `game` is a **standalone** historical records table. Its `home_team_id` and `away_team_id` columns hold the same numeric IDs as `team.team_id` but are not enforced via FK constraints.
 - `boxscore` is a **standalone** table sourced from `GET /v1/gamecenter/{id}/boxscore`. Its `game_id` values correspond to IDs in the `game` table but there is no FK constraint.
 - `dashboard_game` is a **standalone** derived view of today's boxscores. Its rows are copied from `boxscore` by `refresh_dashboard_games()`.
+- `fact_skater_stats` and `fact_goalie_stats` reference both `boxscore` (via `game_id`) and `dim_player` (via `player_id`). The composite primary key `(game_id, player_id)` ensures at most one fact row per player per game.
