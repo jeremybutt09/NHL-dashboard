@@ -53,13 +53,13 @@ class TestDimPlayerBackfillSetup:
         src = _notebook_source()
         assert "roster" in src
 
-    def test_notebook_defines_32_teams(self):
-        """Notebook must define all 32 NHL team abbreviations."""
+    def test_notebook_loads_teams_from_db(self):
+        """Notebook must load NHL_TEAMS from the team table, not a hardcoded list."""
         src = _notebook_source()
         assert "NHL_TEAMS" in src
-        # Spot-check a sample of the 32 teams
-        for team in ("TOR", "EDM", "BOS", "NYR", "MTL"):
-            assert team in src, f"Expected team abbreviation {team} in NHL_TEAMS list"
+        assert "SELECT tri_code FROM team" in src, (
+            "Expected DB query 'SELECT tri_code FROM team' — teams must come from the DB, not a hardcoded list"
+        )
 
     def test_notebook_references_sqlalchemy_engine(self):
         """Notebook must connect via SQLAlchemy create_engine (no Flask app context)."""
@@ -67,9 +67,11 @@ class TestDimPlayerBackfillSetup:
         assert "create_engine" in src
 
     def test_notebook_references_sqlite_db_path(self):
-        """Notebook must reference the Flask app's SQLite database file path."""
+        """Notebook must reference the Flask app's SQLite database at instance/nhl.db."""
         src = _notebook_source()
-        assert "nhl_dashboard.db" in src
+        assert "instance" in src and "nhl.db" in src, (
+            "Expected DB path 'instance/nhl.db' — the path changed from nhl_dashboard.db"
+        )
 
     def test_notebook_references_eastern_time(self):
         """updated_at must be set to current Eastern time on each upsert."""
@@ -93,10 +95,12 @@ class TestDimPlayerBackfillSection1:
             ]
         )
 
-    def test_notebook_section1_fetches_one_team_roster(self):
-        """Section 1 must fetch a single team roster to show response shape."""
+    def test_notebook_section1_queries_team_table(self):
+        """Section 1 must query the team table in the DB to build the team list."""
         src = _notebook_source()
-        assert any(term in src for term in ["SAMPLE_TEAM", "sample_team", "TOR"])
+        assert "tri_code" in src and "team" in src, (
+            "Expected Section 1 to query 'tri_code' from 'team' table in the DB"
+        )
 
     def test_notebook_section1_prints_response_shape(self):
         """Section 1 must print the raw response shape or field inventory."""
@@ -152,10 +156,12 @@ class TestDimPlayerBackfillSection3:
         assert "NHL_TEAMS" in src
         assert any(term in src for term in ["for team in", "for t in"])
 
-    def test_notebook_fetches_20252026_season(self):
-        """Section 3 must fetch the 20252026 season roster."""
+    def test_notebook_fetches_all_seasons_via_roster_season_endpoint(self):
+        """Section 4 must iterate over all seasons fetched from roster-season, not a single hardcoded one."""
         src = _notebook_source()
-        assert "20252026" in src
+        assert "roster-season" in src, (
+            "Expected 'roster-season' endpoint — seasons must come from the API, not hardcoded"
+        )
 
     def test_notebook_handles_http_errors(self):
         """Section 3 must handle HTTP errors and non-200 responses gracefully."""
@@ -245,3 +251,60 @@ class TestDimPlayerBackfillColumns:
     def test_notebook_references_headshot_url(self):
         """Notebook must reference headshot_url column."""
         assert "headshot_url" in _notebook_source()
+
+
+class TestDimPlayerBackfillIssue166:
+    """Tests for Issue #166: DB-driven teams, full historical seasons."""
+
+    def test_notebook_uses_instance_db_path(self):
+        """DB path must point to instance/nhl.db, not nhl_dashboard.db."""
+        src = _notebook_source()
+        assert "instance" in src
+        assert "nhl.db" in src
+        assert "nhl_dashboard.db" not in src, (
+            "Old DB path nhl_dashboard.db must be removed; use instance/nhl.db"
+        )
+
+    def test_notebook_uses_roster_season_endpoint(self):
+        """Notebook must call GET /v1/roster-season/{team} to fetch available seasons."""
+        src = _notebook_source()
+        assert "roster-season" in src, (
+            "Expected 'roster-season' endpoint to fetch all available seasons per team"
+        )
+
+    def test_notebook_defines_roster_seasons_variable(self):
+        """Notebook must define ROSTER_SEASONS dict mapping tri-code to season list."""
+        src = _notebook_source()
+        assert "ROSTER_SEASONS" in src, (
+            "Expected ROSTER_SEASONS dict built from /v1/roster-season/{team} responses"
+        )
+
+    def test_notebook_no_hardcoded_season_constant(self):
+        """Notebook must not define a hardcoded SEASON = '...' constant."""
+        src = _notebook_source()
+        assert "SEASON   =" not in src and 'SEASON = "' not in src, (
+            "SEASON constant must be removed — seasons come from roster-season API"
+        )
+
+    def test_notebook_no_hardcoded_team_list(self):
+        """Notebook must not contain a hardcoded list of team abbreviations."""
+        src = _notebook_source()
+        # Old 32-team hardcoded list had at least 5 abbreviations in a list literal
+        hardcoded_count = sum(1 for t in ("ANA", "BOS", "BUF", "CGY", "CAR",
+                                          "CHI", "COL", "CBJ", "DAL", "DET")
+                              if f'"{t}"' in src)
+        assert hardcoded_count < 3, (
+            "Found hardcoded team abbreviations — teams must come from the DB query"
+        )
+
+    def test_notebook_section4_iterates_over_seasons(self):
+        """Section 4 batch loop must iterate over seasons from ROSTER_SEASONS."""
+        src = _notebook_source()
+        assert "for season in" in src, (
+            "Expected 'for season in ...' nested loop over ROSTER_SEASONS seasons"
+        )
+
+    def test_notebook_commits_inside_team_loop(self):
+        """session.commit() must be called once per team, not once after all teams."""
+        src = _notebook_source()
+        assert "session.commit()" in src, "Expected session.commit() in batch upsert section"
