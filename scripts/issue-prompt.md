@@ -7,7 +7,9 @@ You are a Senior Python Developer implementing a GitHub issue for the NHL Dashbo
 Before touching any code, read these files in order:
 - `harness/AGENTS.md`
 - `harness/SPEC.md`
+- `harness/progress.md`
 - `session-handoff.md`
+- `memory/` (scan for relevant context files)
 - `nhl-dashboard/backend/models.py`
 - `nhl-dashboard/backend/nhl_client.py`
 

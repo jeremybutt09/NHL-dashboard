@@ -19,6 +19,14 @@ Before making any changes, read:
 - **Quality gate**: `./init.sh` — installs deps and runs `pytest tests/`.
 - **New sessions**: read `session-handoff.md` → `feature_list.json` → `RESUME-GUIDE.md`.
 
+## Run tests
+
+```bash
+python3 -m pytest tests/
+```
+
+Or use `./init.sh` for a full bootstrap (installs deps + runs pytest).
+
 ## Mandatory workflow for every change
 
 1. **Red** — write a failing test in `tests/test_*.py`

@@ -135,8 +135,10 @@ def test_claude_md_mentions_ai_skills_submodule():
 # ── session-handoff.md must reflect completed issue ──────────────────────────
 
 def test_session_handoff_mentions_issue_161():
-    """session-handoff.md must be updated to document the last closed issue #161."""
+    """session-handoff.md must document a closed issue at or after #161."""
+    import re
     text = _read(_HANDOFF)
-    assert "#161" in text or "161" in text, (
-        "session-handoff.md must document issue #161 as the last closed issue"
+    issue_numbers = [int(n) for n in re.findall(r"#(\d+)", text)]
+    assert any(n >= 161 for n in issue_numbers), (
+        "session-handoff.md must document a recent closed issue (≥ #161)"
     )

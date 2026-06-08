@@ -6,7 +6,7 @@ _Update this file at the end of every session so the next agent can resume clean
 
 ## Last closed issue
 
-**#161** — Weekly harness review: 2026-06-01
+**#174** — Weekly harness review: 2026-06-08
 
 ## MVP completion status
 
