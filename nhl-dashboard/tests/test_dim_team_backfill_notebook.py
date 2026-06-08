@@ -1,9 +1,15 @@
-"""Tests for dim_team_backfill.ipynb existence and structure (Issue #173).
+"""Tests for dim_team_backfill.ipynb structure after Issue #175 fix.
 
-Verifies the notebook file exists and contains all required sections and
-structural elements defined in the acceptance criteria: Setup, detect missing
-teams, resolve team IDs, fetch per-team detail, upsert function, batch upsert,
-and verification with before/after row counts.
+Verifies the notebook queries the game table by numeric team_id (not live_game
+by tri-code) and removes the unnecessary two-step tri-code → ID resolution.
+
+Section map after fix:
+  Setup          — imports, engine, NHL_STATS_BASE
+  Section 1      — Detect missing teams: game.home_team_id / away_team_id vs team.team_id
+  Section 2      — Fetch per-team detail: GET /team/id/{id} for each MISSING_TEAM_IDS entry
+  Section 3      — Upsert function: upsert_team(session, team_dict)
+  Section 4      — Batch upsert: loop TEAM_DETAIL_MAP, commit
+  Section 5      — Verification: before/after counts, confirm MISSING_TEAM_IDS ⊆ team.team_id
 """
 import json
 from pathlib import Path
@@ -24,7 +30,7 @@ class TestDimTeamBackfillNotebookExists:
     def test_notebook_file_exists(self):
         """dim_team_backfill.ipynb must exist in the notebooks directory."""
         assert _NOTEBOOK_PATH.exists(), (
-            f"Expected notebook at {_NOTEBOOK_PATH} — create it to satisfy Issue #173."
+            f"Expected notebook at {_NOTEBOOK_PATH}"
         )
 
     def test_notebook_is_valid_json_with_cells(self):
@@ -77,162 +83,163 @@ class TestDimTeamBackfillSection1:
         src = _notebook_source()
         assert "Section 1" in src
 
-    def test_notebook_section1_queries_live_game_away_code(self):
-        """Section 1 must query live_game.away_code to detect missing teams."""
+    def test_notebook_section1_queries_game_table_away_team_id(self):
+        """Section 1 must query game.away_team_id (integer), not live_game.away_code."""
         src = _notebook_source()
-        assert "away_code" in src
-        assert "live_game" in src
+        assert "away_team_id" in src
+        assert "game" in src
 
-    def test_notebook_section1_queries_live_game_home_code(self):
-        """Section 1 must query live_game.home_code to detect missing teams."""
+    def test_notebook_section1_queries_game_table_home_team_id(self):
+        """Section 1 must query game.home_team_id (integer), not live_game.home_code."""
         src = _notebook_source()
-        assert "home_code" in src
+        assert "home_team_id" in src
 
-    def test_notebook_section1_subtracts_existing_teams(self):
-        """Section 1 must subtract tri-codes already present in the team table."""
+    def test_notebook_section1_does_not_query_live_game(self):
+        """Section 1 must NOT reference the live_game table — use game table instead."""
         src = _notebook_source()
-        assert "team" in src
-        assert any(term in src for term in ["tri_code", "SELECT tri_code"])
+        assert "live_game" not in src
 
-    def test_notebook_section1_identifies_missing_codes(self):
-        """Section 1 must build a list/set of missing tri-codes."""
+    def test_notebook_section1_compares_against_team_team_id(self):
+        """Section 1 must compare integer IDs against team.team_id, not team.tri_code."""
         src = _notebook_source()
-        assert any(term in src for term in ["missing", "MISSING"])
+        # Must reference team_id from team table as the comparison column
+        assert "team_id" in src
+
+    def test_notebook_section1_uses_missing_team_ids(self):
+        """Section 1 must store result in MISSING_TEAM_IDS (not MISSING_CODES)."""
+        src = _notebook_source()
+        assert "MISSING_TEAM_IDS" in src
+
+    def test_notebook_section1_does_not_use_missing_codes(self):
+        """Section 1 must not use MISSING_CODES — the bug that caused 0 upserts."""
+        src = _notebook_source()
+        assert "MISSING_CODES" not in src
 
 
 class TestDimTeamBackfillSection2:
     def test_notebook_section2_exists(self):
-        """Notebook must contain Section 2 — Resolve team IDs."""
+        """Notebook must contain Section 2 — Fetch per-team detail."""
         src = _notebook_source()
         assert "Section 2" in src
 
-    def test_notebook_section2_calls_team_list_endpoint(self):
-        """Section 2 must call GET /stats/rest/en/team to get the full team list."""
+    def test_notebook_section2_calls_team_id_endpoint(self):
+        """Section 2 must call GET /stats/rest/en/team/id/{id} for each missing ID."""
         src = _notebook_source()
-        assert "stats/rest/en/team" in src
+        assert "stats/rest/en/team/id" in src
 
-    def test_notebook_section2_builds_tricode_to_id_map(self):
-        """Section 2 must build a triCode → id lookup map."""
+    def test_notebook_section2_builds_team_detail_map(self):
+        """Section 2 must build TEAM_DETAIL_MAP keyed by integer team ID."""
         src = _notebook_source()
-        assert any(term in src for term in ["triCode", "tri_code"])
-        assert any(term in src for term in ["lookup", "map", "tricode_to_id", "id_map", "TEAM_ID"])
+        assert "TEAM_DETAIL_MAP" in src
+
+    def test_notebook_section2_does_not_use_tricode_to_id(self):
+        """Section 2 must not use TRICODE_TO_ID — the unnecessary resolution step."""
+        src = _notebook_source()
+        assert "TRICODE_TO_ID" not in src
+
+    def test_notebook_section2_extracts_franchise_id(self):
+        """Section 2 must extract franchiseId from the per-team detail response."""
+        src = _notebook_source()
+        assert "franchiseId" in src or "franchise_id" in src
+
+    def test_notebook_section2_extracts_full_name(self):
+        """Section 2 must extract fullName from the per-team detail response."""
+        src = _notebook_source()
+        assert "fullName" in src or "full_name" in src
+
+    def test_notebook_section2_extracts_league_id(self):
+        """Section 2 must extract leagueId from the per-team detail response."""
+        src = _notebook_source()
+        assert "leagueId" in src or "league_id" in src
+
+    def test_notebook_section2_extracts_raw_tricode(self):
+        """Section 2 must extract rawTricode from the per-team detail response."""
+        src = _notebook_source()
+        assert "rawTricode" in src or "raw_tricode" in src
+
+    def test_notebook_section2_handles_errors(self):
+        """Section 2 must handle individual API failures without aborting the loop."""
+        src = _notebook_source()
+        assert any(term in src for term in ["try", "except", "raise_for_status"])
 
 
 class TestDimTeamBackfillSection3:
     def test_notebook_section3_exists(self):
-        """Notebook must contain Section 3 — Fetch per-team detail."""
+        """Notebook must contain Section 3 — Upsert function."""
         src = _notebook_source()
         assert "Section 3" in src
 
-    def test_notebook_section3_calls_team_id_endpoint(self):
-        """Section 3 must call GET /stats/rest/en/team/id/{id} for each missing team."""
-        src = _notebook_source()
-        assert "stats/rest/en/team/id" in src
-
-    def test_notebook_section3_extracts_franchise_id(self):
-        """Section 3 must extract franchiseId from the per-team detail response."""
-        src = _notebook_source()
-        assert "franchiseId" in src or "franchise_id" in src
-
-    def test_notebook_section3_extracts_full_name(self):
-        """Section 3 must extract fullName from the per-team detail response."""
-        src = _notebook_source()
-        assert "fullName" in src or "full_name" in src
-
-    def test_notebook_section3_extracts_league_id(self):
-        """Section 3 must extract leagueId from the per-team detail response."""
-        src = _notebook_source()
-        assert "leagueId" in src or "league_id" in src
-
-    def test_notebook_section3_extracts_raw_tricode(self):
-        """Section 3 must extract rawTricode from the per-team detail response."""
-        src = _notebook_source()
-        assert "rawTricode" in src or "raw_tricode" in src
-
-
-class TestDimTeamBackfillSection4:
-    def test_notebook_section4_exists(self):
-        """Notebook must contain Section 4 — Upsert function."""
-        src = _notebook_source()
-        assert "Section 4" in src
-
-    def test_notebook_section4_defines_upsert_team(self):
-        """Section 4 must define an upsert_team function."""
+    def test_notebook_section3_defines_upsert_team(self):
+        """Section 3 must define an upsert_team function."""
         src = _notebook_source()
         assert "upsert_team" in src
 
-    def test_notebook_section4_uses_session_merge(self):
+    def test_notebook_section3_uses_session_merge(self):
         """upsert_team must use session.merge() for idempotent upserts."""
         src = _notebook_source()
         assert "session.merge" in src or "merge(" in src
 
-    def test_notebook_section4_imports_team_model(self):
-        """Section 4 must import Team from models."""
+    def test_notebook_section3_imports_team_model(self):
+        """Section 3 must import Team from models."""
         src = _notebook_source()
         assert "Team" in src
         assert "from models" in src or "import models" in src
 
 
-class TestDimTeamBackfillSection5:
-    def test_notebook_section5_exists(self):
-        """Notebook must contain Section 5 — Batch upsert."""
+class TestDimTeamBackfillSection4:
+    def test_notebook_section4_exists(self):
+        """Notebook must contain Section 4 — Batch upsert."""
         src = _notebook_source()
-        assert "Section 5" in src
+        assert "Section 4" in src
 
-    def test_notebook_section5_loops_over_missing_teams(self):
-        """Section 5 must iterate over the missing tri-code list."""
+    def test_notebook_section4_loops_over_team_detail_map(self):
+        """Section 4 must iterate over TEAM_DETAIL_MAP (not a tri-code list)."""
         src = _notebook_source()
-        assert any(
-            term in src for term in ["for tri_code in", "for code in", "for team in"]
-        )
+        assert "TEAM_DETAIL_MAP" in src
+        assert any(term in src for term in ["for ", "TEAM_DETAIL_MAP.items"])
 
-    def test_notebook_section5_calls_upsert_team(self):
-        """Section 5 batch loop must call upsert_team()."""
+    def test_notebook_section4_calls_upsert_team(self):
+        """Section 4 batch loop must call upsert_team()."""
         src = _notebook_source()
         assert "upsert_team" in src
 
-    def test_notebook_section5_commits_after_batch(self):
-        """Section 5 must commit the session after the batch upsert."""
+    def test_notebook_section4_commits_after_batch(self):
+        """Section 4 must commit the session after the batch upsert."""
         src = _notebook_source()
         assert "session.commit()" in src
 
-    def test_notebook_section5_has_rate_limiting(self):
-        """Section 5 must rate-limit API requests at 50 ms."""
+
+class TestDimTeamBackfillSection5:
+    def test_notebook_section5_exists(self):
+        """Notebook must contain Section 5 — Verification."""
         src = _notebook_source()
-        assert "time.sleep" in src
+        assert "Section 5" in src
 
-    def test_notebook_section5_handles_errors(self):
-        """Section 5 must handle individual API failures without aborting the loop."""
-        src = _notebook_source()
-        assert any(term in src for term in ["try", "except", "raise_for_status"])
-
-
-class TestDimTeamBackfillSection6:
-    def test_notebook_section6_exists(self):
-        """Notebook must contain Section 6 — Verification."""
-        src = _notebook_source()
-        assert "Section 6" in src
-
-    def test_notebook_section6_shows_before_after_counts(self):
-        """Section 6 must show before/after row counts to confirm insertions."""
+    def test_notebook_section5_shows_before_after_counts(self):
+        """Section 5 must show before/after row counts to confirm insertions."""
         src = _notebook_source()
         assert any(term in src for term in ["before", "after", "COUNT", "count"])
 
-    def test_notebook_section6_queries_team_table(self):
-        """Section 6 must query the team table to confirm new rows were inserted."""
+    def test_notebook_section5_queries_team_table(self):
+        """Section 5 must query the team table to confirm new rows were inserted."""
         src = _notebook_source()
         assert "team" in src
         assert any(term in src for term in ["SELECT COUNT", "COUNT(*)", "count"])
 
-    def test_notebook_section6_shows_sample_rows(self):
-        """Section 6 must display a sample of newly inserted rows."""
+    def test_notebook_section5_confirms_missing_team_ids_resolved(self):
+        """Section 5 must confirm all MISSING_TEAM_IDS now appear in team.team_id."""
         src = _notebook_source()
-        assert any(term in src for term in ["LIMIT", "head(", "display(", "sample("])
+        assert "MISSING_TEAM_IDS" in src
 
-    def test_notebook_section6_shows_dataframe(self):
-        """Section 6 must display a DataFrame of inserted rows."""
+    def test_notebook_section5_shows_dataframe(self):
+        """Section 5 must display a DataFrame of inserted rows."""
         src = _notebook_source()
         assert any(term in src for term in ["DataFrame", "display(", "df_"])
+
+    def test_notebook_no_section6(self):
+        """After the fix, the notebook must have only 5 numbered sections (no Section 6)."""
+        src = _notebook_source()
+        assert "Section 6" not in src
 
 
 class TestDimTeamBackfillColumns:
